@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "shadertoy",
+  "version": "0.0.1",
+  "dependencies": [
+    {
+      "name": "imgui",
+      "features": [
+        "glfw-binding",
+        "opengl3-binding",
+        "docking-experimental"
+      ]
+    },
+    "glfw3",
+    "opengl",
+    "fmt",
+    "glew"
+  ],
+  "builtin-baseline": "eebcbc7ca3f4ef825b14949e0b702a7517ab8565"
+}

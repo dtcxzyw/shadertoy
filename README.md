@@ -1,2 +1,2 @@
 # shadertoy
-ShaderToy live viewer
+Unofficial ShaderToy live viewer

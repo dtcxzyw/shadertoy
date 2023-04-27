@@ -1,0 +1,7 @@
+*.DotSettings
+CMakeSettings.json
+.vs
+.vscode
+.cache
+build
+out
