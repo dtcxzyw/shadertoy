@@ -13,8 +13,11 @@
 */
 
 #include "shadertoy/Backend.hpp"
+#include "shadertoy/Support.hpp"
 #include <GL/glew.h>
 #include <array>
+#include <gsl/gsl>
+#include <hello_imgui/hello_imgui.h>
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -69,13 +72,15 @@ static void checkShaderCompileError(const GLuint shader, const std::string_view 
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if(!success) {
             glGetShaderInfoLog(shader, static_cast<GLsizei>(buffer.size()), nullptr, buffer.data());
-            reportError(buffer.data());
+            Log(HelloImGui::LogLevel::Error, "%s", buffer.data());
+            throw Error{};
         }
     } else {
         glGetProgramiv(shader, GL_LINK_STATUS, &success);
         if(!success) {
             glGetProgramInfoLog(shader, static_cast<GLsizei>(buffer.size()), nullptr, buffer.data());
-            reportError(buffer.data());
+            Log(HelloImGui::LogLevel::Error, "%s", buffer.data());
+            throw Error{};
         }
     }
 }
@@ -93,26 +98,28 @@ class OpenGLPipeline final : public Pipeline {
 
 public:
     explicit OpenGLPipeline(const char* pixelSrc) {
+        const auto start = Clock::now();
+
         const auto shaderVertex = glCreateShader(GL_VERTEX_SHADER);
+        auto vertGuard = scopeExit([&] { glDeleteShader(shaderVertex); });
         glShaderSource(shaderVertex, 1, &shaderVertexSrc, nullptr);
         glCompileShader(shaderVertex);
         checkShaderCompileError(shaderVertex, "VERTEX");
 
         const auto shaderPixel = glCreateShader(GL_FRAGMENT_SHADER);
+        auto pixelGuard = scopeExit([&] { glDeleteShader(shaderPixel); });
         glShaderSource(shaderPixel, 1, &pixelSrc, nullptr);
         glCompileShader(shaderPixel);
-        checkShaderCompileError(shaderPixel, "FRAGMENT");
+        checkShaderCompileError(shaderPixel, "PIXEL");
 
         mProgram = glCreateProgram();
+        auto programGuard = scopeFail([&] { glDeleteProgram(mProgram); });
         glAttachShader(mProgram, shaderVertex);
+        auto vertBindGuard = scopeExit([&] { glDetachShader(mProgram, shaderVertex); });
         glAttachShader(mProgram, shaderPixel);
+        auto pixelBindGuard = scopeExit([&] { glDetachShader(mProgram, shaderPixel); });
         glLinkProgram(mProgram);
         checkShaderCompileError(mProgram, "PROGRAM");
-
-        glDetachShader(mProgram, shaderVertex);
-        glDetachShader(mProgram, shaderPixel);
-        glDeleteShader(shaderVertex);
-        glDeleteShader(shaderPixel);
 
         glGenBuffers(1, &mVBO);
         glBindBuffer(GL_ARRAY_BUFFER, mVBO);
@@ -134,6 +141,10 @@ public:
         SHADERTOY_GET_UNIFORM_LOCATION(Frame);
         SHADERTOY_GET_UNIFORM_LOCATION(Mouse);
 #undef SHADERTOY_GET_UNIFORM_LOCATION
+
+        const auto duration =
+            static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) * 1e-9;
+        Log(HelloImGui::LogLevel::Info, "Compiled in %.1f secs", duration);
     }
 
     ~OpenGLPipeline() override {
@@ -142,9 +153,9 @@ public:
         glDeleteBuffers(1, &mVBO);
     }
 
-    void render(int32_t width, int32_t height, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
+    void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
                 const ShaderToyUniform& uniform) override {
-        glScissor(static_cast<GLint>(clipMin.x), static_cast<GLint>(static_cast<float>(height) - clipMax.y),
+        glScissor(static_cast<GLint>(clipMin.x), static_cast<GLint>(frameBufferSize.y - clipMax.y),
                   static_cast<GLint>(clipMax.x - clipMin.x), static_cast<GLint>(clipMax.y - clipMin.y));
 
         glUseProgram(mProgram);
@@ -158,8 +169,8 @@ public:
             Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 } },  // right-bottom
         };
         for(auto& [pos, coord] : vertices) {
-            pos.x = pos.x / static_cast<float>(width) * 2.0f - 1.0f;
-            pos.y = 1.0f - pos.y / static_cast<float>(height) * 2.0f;
+            pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
+            pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
         }
         glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
 
@@ -182,7 +193,11 @@ public:
 };
 
 std::unique_ptr<Pipeline> createPipeline(const std::string& src) {
-    return std::make_unique<OpenGLPipeline>((shaderPixelHeader + src + shaderPixelFooter).c_str());
+    try {
+        return std::make_unique<OpenGLPipeline>((shaderPixelHeader + src + shaderPixelFooter).c_str());
+    } catch(Error) {
+        return {};
+    }
 }
 
 SHADERTOY_NAMESPACE_END

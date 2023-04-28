@@ -1,0 +1,6 @@
+[submodule "shadertoy/thirdparty/hello_imgui"]
+	path = shadertoy/thirdparty/hello_imgui
+	url = https://github.com/pthom/hello_imgui
+[submodule "shadertoy/thirdparty/ImGuiColorTextEdit"]
+	path = shadertoy/thirdparty/ImGuiColorTextEdit
+	url = https://github.com/BalazsJako/ImGuiColorTextEdit

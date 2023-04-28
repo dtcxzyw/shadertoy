@@ -1,10 +1,12 @@
-file(GLOB_RECURSE SHADERTOY_SRC "*.cpp")
+file(GLOB SHADERTOY_SRC "*.cpp")
 
-find_package(glfw3 CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(GLEW CONFIG REQUIRED)
-find_package(OpenGL REQUIRED)
+find_package(unofficial-nativefiledialog CONFIG REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
 
-add_executable(shadertoy ${SHADERTOY_SRC})
-target_link_libraries(shadertoy PRIVATE glfw imgui::imgui fmt::fmt GLEW::GLEW OpenGL::GL)
+add_subdirectory(thirdparty)
+
+hello_imgui_add_app(shadertoy ${SHADERTOY_SRC} ${CMAKE_CURRENT_LIST_DIR}/thirdparty/ImGuiColorTextEdit/TextEditor.cpp)
+target_include_directories(shadertoy PRIVATE ${CMAKE_CURRENT_LIST_DIR}/thirdparty/hello_imgui/src ${HELLOIMGUI_IMGUI_SOURCE_DIR} ${CMAKE_CURRENT_LIST_DIR}/thirdparty/)
+target_link_libraries(shadertoy PRIVATE fmt::fmt GLEW::GLEW unofficial::nativefiledialog::nfd Microsoft.GSL::GSL)

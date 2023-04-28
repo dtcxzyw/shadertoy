@@ -13,34 +13,29 @@
 */
 
 #pragma once
+
 #include "shadertoy/Config.hpp"
-#include <hello_imgui/hello_imgui.h>
-#include <memory>
-#include <string>
+#include <chrono>
+#include <gsl/gsl>
+#include <string_view>
 
 SHADERTOY_NAMESPACE_BEGIN
 
-struct ShaderToyUniform final {
-    float time;
-    float timeDelta;
-    float frameRate;
-    int32_t frame;
-    ImVec4 mouse;
-};
+template <typename F>
+auto scopeExit(F&& f) {
+    return gsl::finally(std::forward<F>(f));
+}
 
-class Pipeline {
-public:
-    Pipeline() = default;
-    Pipeline(const Pipeline&) = delete;
-    Pipeline& operator=(const Pipeline&) = delete;
-    Pipeline(Pipeline&&) = delete;
-    Pipeline& operator=(Pipeline&&) = delete;
-    virtual ~Pipeline() = default;
+template <typename F>
+auto scopeFail(F&& f) {
+    return gsl::finally([func = std::forward<F>(f)]() mutable {
+        if(std::uncaught_exceptions())
+            func();
+    });
+}
 
-    virtual void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
-                        const ShaderToyUniform& uniform) = 0;
-};
+using Clock = std::chrono::steady_clock;
 
-std::unique_ptr<Pipeline> createPipeline(const std::string& src);
-
+struct Error {};
+[[noreturn]] void reportFatalError(std::string_view error);
 SHADERTOY_NAMESPACE_END

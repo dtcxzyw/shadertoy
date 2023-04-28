@@ -33,8 +33,3 @@
 #else
 #error "Unsupported platform"
 #endif
-#include <string_view>
-
-SHADERTOY_NAMESPACE_BEGIN
-[[noreturn]] void reportError(std::string_view error);
-SHADERTOY_NAMESPACE_END

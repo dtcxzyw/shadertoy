@@ -21,9 +21,8 @@ SHADERTOY_NAMESPACE_BEGIN
 ShaderToyContext::ShaderToyContext() : mRunning{ true } {
     reset();
 }
-void ShaderToyContext::tick(int32_t width, int32_t height) {
-    mFBWidth = width;
-    mFBHeight = height;
+void ShaderToyContext::tick() {
+    mFBSize = ImGui::GetWindowViewport()->Size;
 
     if(!mRunning)
         return;
@@ -73,7 +72,7 @@ void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVe
                 const ImVec2 clipMax((cmd->ClipRect.z - clipOff.x) * clipScale.x, (cmd->ClipRect.w - clipOff.y) * clipScale.y);
                 if(clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
                     return;
-                ctx->mPipeline->render(ctx->mFBWidth, ctx->mFBHeight, clipMin, clipMax, ctx->mBase, ctx->mSize,
+                ctx->mPipeline->render(ctx->mFBSize, clipMin, clipMax, ctx->mBase, ctx->mSize,
                                        { ctx->mTime, ctx->mTimeDelta, ImGui::GetIO().Framerate, ctx->mFrameCount, ctx->mMouse });
             },
             this);
@@ -82,8 +81,10 @@ void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVe
         drawList->AddRect(mBase, ImVec2{ mBase.x + mSize.x, mBase.y + mSize.y }, IM_COL32(255, 255, 0, 255));
 }
 void ShaderToyContext::compile(const std::string& src) {
-    if(auto pipeline = createPipeline(src))
+    if(auto pipeline = createPipeline(src)) {
         mPipeline = std::move(pipeline);
+        reset();
+    }
 }
 
 SHADERTOY_NAMESPACE_END

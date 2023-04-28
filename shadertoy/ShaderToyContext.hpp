@@ -15,12 +15,11 @@
 #pragma once
 #include "shadertoy/Backend.hpp"
 #include "shadertoy/Config.hpp"
-#include <chrono>
+#include "shadertoy/Support.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 
 class ShaderToyContext final {
-    using Clock = std::chrono::steady_clock;
     Clock::time_point mStartTime;
     Clock::time_point mPauseTime;
     float mTime{};
@@ -30,14 +29,13 @@ class ShaderToyContext final {
     ImVec2 mBase;
     ImVec2 mSize;
     ImVec4 mMouse{ 0.0f, 0.0f, 0.0f, 0.0f };
-    int32_t mFBWidth{};
-    int32_t mFBHeight{};
+    ImVec2 mFBSize;
 
     std::unique_ptr<Pipeline> mPipeline;
 
 public:
     ShaderToyContext();
-    void tick(int32_t width, int32_t height);
+    void tick();
     [[nodiscard]] bool isRunning() const noexcept {
         return mRunning;
     }

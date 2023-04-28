@@ -1,0 +1,6 @@
+set(HELLOIMGUI_USE_GLFW_OPENGL3 ON)
+set(HELLOIMGUI_BUILD_IMGUI ON)
+set(HELLOIMGUI_USE_GLFW_OPENGL3 OFF)
+add_subdirectory(hello_imgui)
+list(APPEND CMAKE_MODULE_PATH ${HELLOIMGUI_CMAKE_PATH})
+include(hello_imgui_add_app)
