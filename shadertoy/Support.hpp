@@ -36,6 +36,6 @@ auto scopeFail(F&& f) {
 
 using Clock = std::chrono::steady_clock;
 
-struct Error {};
+struct Error final : public std::exception {};
 [[noreturn]] void reportFatalError(std::string_view error);
 SHADERTOY_NAMESPACE_END

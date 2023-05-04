@@ -13,8 +13,8 @@
 */
 
 #include "shadertoy/Config.hpp"
+#include "shadertoy/NodeEditor/PipelineEditor.hpp"
 #include "shadertoy/ShaderToyContext.hpp"
-#include <ImGuiColorTextEdit/TextEditor.h>
 #include <cstdlib>
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
@@ -24,6 +24,8 @@
 #include <GL/glew.h>
 
 SHADERTOY_NAMESPACE_BEGIN
+
+namespace ed = ax::NodeEditor;
 
 [[noreturn]] void reportFatalError(std::string_view error) {
     // TODO: pop up a message box
@@ -77,29 +79,6 @@ static void showCanvas(ShaderToyContext& ctx) {
     ImGui::End();
 }
 
-class ShaderToyEditor final {
-    TextEditor mEditor;
-
-public:
-    ShaderToyEditor() {
-        const auto lang = TextEditor::LanguageDefinition::GLSL();
-        mEditor.SetLanguageDefinition(lang);
-        mEditor.SetTabSize(4);
-        mEditor.SetShowWhitespaces(false);
-    }
-
-    [[nodiscard]] std::string getText() const {
-        return mEditor.GetText();
-    }
-
-    void render(const ImVec2 size) {
-        const auto cpos = mEditor.GetCursorPosition();
-        ImGui::Text("%6d/%-6d %6d lines  %s", cpos.mLine + 1, cpos.mColumn + 1, mEditor.GetTotalLines(),
-                    mEditor.IsOverwrite() ? "Ovr" : "Ins");
-        mEditor.Render("TextEditor", size, false);
-    }
-};
-
 static ShaderToyEditor editor;
 
 static void showShaderEditor(ShaderToyContext& ctx) {
@@ -108,13 +87,21 @@ static void showShaderEditor(ShaderToyContext& ctx) {
         return;
     }
 
-    ImGui::SetNextItemWidth(-ImGui::GetStyle().ItemSpacing.x);
-    const auto reservedHeight = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
-    editor.render(ImVec2(0, -reservedHeight));
-    // ImGui::InputTextMultiline("##ShaderSource", &src, , ImGuiInputTextFlags_AllowTabInput);
-    ImGui::Separator();
-    if(ImGui::Button("compile")) {
-        ctx.compile(editor.getText());  // TODO: error marker
+    if(ImGui::BeginTabBar("##EditorTabBar", ImGuiTabBarFlags_Reorderable)) {
+        // pipeline
+        if(ImGui::BeginTabItem("Pipeline", nullptr, ImGuiTabItemFlags_NoReorder)) {
+            PipelineEditor::get().render([&] {
+                ctx.compile(editor.getText());  // TODO: error marker
+            });
+            ImGui::EndTabItem();
+        }
+
+        static bool open = true;
+        if(open && ImGui::BeginTabItem("Shader Editor", &open, ImGuiTabBarFlags_None)) {
+            editor.render(ImVec2(0, 0));
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
     }
     ImGui::End();
 }

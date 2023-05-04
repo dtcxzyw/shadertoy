@@ -8,7 +8,11 @@
     "glew",
     "cpp-httplib",
     "nativefiledialog",
-    "ms-gsl"
+    "ms-gsl",
+    "magic-enum",
+    "cpp-base64",
+    "nlohmann-json",
+    "stb"
   ],
   "builtin-baseline": "eebcbc7ca3f4ef825b14949e0b702a7517ab8565"
 }

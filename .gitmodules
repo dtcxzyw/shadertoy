@@ -4,3 +4,10 @@
 [submodule "shadertoy/thirdparty/ImGuiColorTextEdit"]
 	path = shadertoy/thirdparty/ImGuiColorTextEdit
 	url = https://github.com/BalazsJako/ImGuiColorTextEdit
+[submodule "shadertoy/thirdparty/imgui-node-editor"]
+	path = shadertoy/thirdparty/imgui-node-editor
+	url = https://github.com/dtcxzyw/imgui-node-editor
+[submodule "shadertoy/thirdparty/imgui"]
+	path = shadertoy/thirdparty/imgui
+	url = https://github.com/dtcxzyw/imgui.git
+	branch = docking
