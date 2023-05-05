@@ -28,8 +28,7 @@ class ShaderToyContext final {
     bool mRunning;
     ImVec2 mBase;
     ImVec2 mSize;
-    ImVec4 mMouse{ 0.0f, 0.0f, 0.0f, 0.0f };
-    ImVec2 mFBSize;
+    ImVec4 mMouse{ 0.0f, 0.0f, -1.0f, -1.0f };
 
     std::unique_ptr<Pipeline> mPipeline;
 
@@ -46,7 +45,10 @@ public:
     void resume();
     void reset();
     void render(ImVec2 base, ImVec2 size, const std::optional<ImVec4>& mouse);
-    void compile(const std::string& src);
+    void reset(std::unique_ptr<Pipeline> pipeline);
+    [[nodiscard]] bool isValid() const noexcept {
+        return mPipeline.get();
+    }
 };
 
 SHADERTOY_NAMESPACE_END

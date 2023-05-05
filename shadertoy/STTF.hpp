@@ -22,7 +22,7 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
-enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, Unknown };
+enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, LastFrame, Unknown };
 enum class NodeType { Image, CubeMap, Sound };
 enum class Filter { Mipmap, Linear, Nearest };
 enum class Wrap { Clamp, Repeat };
@@ -71,14 +71,25 @@ struct GLSLShader final : Node {
     }
 };
 
+struct LastFrame final : Node {
+    std::string refNodeName;
+    NodeType nodeType;
+
+    LastFrame(std::string refNodeName, NodeType nodeType) : refNodeName{ std::move(refNodeName) }, nodeType{ nodeType } {}
+    [[nodiscard]] NodeClass getNodeClass() const noexcept override {
+        return NodeClass::LastFrame;
+    }
+    [[nodiscard]] NodeType getNodeType() const noexcept override {
+        return nodeType;
+    }
+};
+
 struct Texture final : Node {
     uint32_t width;
     uint32_t height;
-    bool flipY;
     std::vector<uint32_t> pixel;  // R8G8B8A8
 
-    Texture(uint32_t w, uint32_t h, bool flip, std::vector<uint32_t> data)
-        : width{ w }, height{ h }, flipY{ flip }, pixel{ std::move(data) } {}
+    Texture(uint32_t w, uint32_t h, std::vector<uint32_t> data) : width{ w }, height{ h }, pixel{ std::move(data) } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::Texture;
     }

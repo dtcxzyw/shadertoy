@@ -20,10 +20,6 @@
 #include <magic_enum.hpp>
 #include <nlohmann/json.hpp>
 
-#include <stb_image.h>
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include <stb_image_write.h>
-
 SHADERTOY_NAMESPACE_BEGIN
 
 void ShaderToyTransmissionFormat::load(const std::string& filePath) {
@@ -56,18 +52,13 @@ void ShaderToyTransmissionFormat::load(const std::string& filePath) {
                 break;
             }
             case NodeClass::Texture: {
+                const auto width = node.at("width").get<uint32_t>();
+                const auto height = node.at("height").get<uint32_t>();
                 const auto base64Data = node.at("data").get<std::string>();
-                const auto flipY = node.at("flipY").get<bool>();
-                stbi_set_flip_vertically_on_load(flipY);
                 const auto decodedData = base64_decode(base64Data);
-                int width, height, channels;
-                const auto ptr = stbi_load_from_memory(std::bit_cast<const stbi_uc*>(decodedData.c_str()),
-                                                       static_cast<int>(decodedData.size()), &width, &height, &channels, 4);
-                auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
-                const auto begin = std::bit_cast<const uint32_t*>(ptr);
+                const auto begin = std::bit_cast<const uint32_t*>(decodedData.data());
                 const auto end = begin + static_cast<ptrdiff_t>(width) * height;
-                nodeVal = std::make_unique<Texture>(static_cast<uint32_t>(width), static_cast<uint32_t>(height), flipY,
-                                                    std::vector<uint32_t>{ begin, end });
+                nodeVal = std::make_unique<Texture>(width, height, std::vector<uint32_t>{ begin, end });
                 break;
             }
             default: {
@@ -105,14 +96,8 @@ void ShaderToyTransmissionFormat::save(const std::string& filePath) const {
             }
             case NodeClass::Texture: {
                 const auto& texture = dynamic_cast<Texture&>(*node);
-                stbi_flip_vertically_on_write(texture.flipY);
-                int size;
-                const auto ptr =
-                    stbi_write_png_to_mem(std::bit_cast<const uint8_t*>(texture.pixel.data()), 0,
-                                          static_cast<int32_t>(texture.width), static_cast<int32_t>(texture.height), 4, &size);
-                auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
-                jsonNode["data"] = base64_encode(ptr, size);
-                jsonNode["flipY"] = texture.flipY;
+                const auto bytes = as_bytes(std::span{ texture.pixel.begin(), texture.pixel.end() });
+                jsonNode["data"] = base64_encode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
                 break;
             }
             default: {

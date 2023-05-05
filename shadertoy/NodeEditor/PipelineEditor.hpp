@@ -18,9 +18,8 @@
 #include "shadertoy/NodeEditor/Builders.hpp"
 #include "shadertoy/NodeEditor/Widgets.hpp"
 #include "shadertoy/STTF.hpp"
+#include "shadertoy/ShaderToyContext.hpp"
 #include <ImGuiColorTextEdit/TextEditor.h>
-#include <functional>
-#include <optional>
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -28,27 +27,13 @@ class ShaderToyEditor final {
     TextEditor mEditor;
 
 public:
-    ShaderToyEditor() {
-        const auto lang = TextEditor::LanguageDefinition::GLSL();
-        mEditor.SetLanguageDefinition(lang);
-        mEditor.SetTabSize(4);
-        mEditor.SetShowWhitespaces(false);
-    }
+    ShaderToyEditor();
+    ShaderToyEditor(const ShaderToyEditor&) = delete;
+    ShaderToyEditor& operator=(const ShaderToyEditor&) = delete;
 
-    [[nodiscard]] std::string getText() const {
-        return mEditor.GetText();
-    }
-
-    void setText(const std::string& str) {
-        mEditor.SetText(str);
-    }
-
-    void render(const ImVec2 size) {
-        const auto cpos = mEditor.GetCursorPosition();
-        ImGui::Text("%6d/%-6d %6d lines  %s", cpos.mLine + 1, cpos.mColumn + 1, mEditor.GetTotalLines(),
-                    mEditor.IsOverwrite() ? "Ovr" : "Ins");
-        mEditor.Render("TextEditor", size, false);
-    }
+    [[nodiscard]] std::string getText() const;
+    void setText(const std::string& str);
+    void render(const ImVec2 size);
 };
 
 namespace ed = ax::NodeEditor;
@@ -74,41 +59,72 @@ struct EditorNode {
     ed::NodeId ID;
     std::string Name;
     std::vector<EditorPin> Inputs;
-    std::optional<EditorPin> Output;
+    std::vector<EditorPin> Outputs;
     ImColor Color;
     NodeType Type;
     bool rename = false;
 
-    EditorNode(uint32_t id, const char* name, ImColor color = ImColor(255, 255, 255))
-        : ID(id), Name(name), Color(color), Type(NodeType::Image) {}
+    EditorNode(uint32_t id, std::string name, ImColor color = ImColor(255, 255, 255))
+        : ID(id), Name(std::move(name)), Color(color), Type(NodeType::Image) {}
+    EditorNode(const EditorNode&) = delete;
+    EditorNode& operator=(const EditorNode&) = delete;
     virtual ~EditorNode() = default;
 
+    [[nodiscard]] virtual NodeClass getClass() const noexcept = 0;
     virtual void renderContent() {}
     virtual std::unique_ptr<Node> toSTTF() const = 0;
     virtual void fromSTTF(Node& node) = 0;
 };
 
 struct EditorRenderOutput final : EditorNode {
-    EditorRenderOutput(uint32_t id, const char* name) : EditorNode(id, name) {}
+    EditorRenderOutput(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::RenderOutput;
+    }
 };
 
 struct EditorShader final : EditorNode {
     ShaderToyEditor editor;
     bool isOpen = false;
+    bool requestFocus = false;
 
-    EditorShader(uint32_t id, const char* name) : EditorNode(id, name) {}
+    EditorShader(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::GLSLShader;
+    }
+};
+
+struct EditorLastFrame final : EditorNode {
+    EditorNode* lastFrame = nullptr;
+    bool openPopup = false;
+
+    EditorLastFrame(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    void renderContent() override;
+    void renderPopup();
+    std::unique_ptr<Node> toSTTF() const override;
+    void fromSTTF(Node& node) override;
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::LastFrame;
+    }
 };
 
 struct EditorTexture final : EditorNode {
-    EditorTexture(uint32_t id, const char* name) : EditorNode(id, name) {}
+    std::vector<uint32_t> pixel;
+    std::unique_ptr<TextureObject> textureId;
+
+    EditorTexture(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
+
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::Texture;
+    }
 };
 
 struct EditorLink final {
@@ -132,23 +148,36 @@ class PipelineEditor final {
     std::vector<EditorLink> mLinks;
     ed::NodeId contextNodeId;
     ed::LinkId contextLinkId;
+    std::vector<const char*> shaderNodeNames;
+    std::vector<EditorNode*> shaderNodes;
 
     uint32_t nextId();
     bool isPinLinked(ed::PinId id) const;
     EditorNode* findNode(ed::NodeId id) const;
+    EditorPin* findPin(ed::PinId id) const;
+    bool isUniqueName(const std::string_view& name, const EditorNode* exclude) const;
+    std::string generateUniqueName(const std::string_view& base) const;
+    bool canCreateLink(const EditorPin* startPin, const EditorPin* endPin);
 
     void setupInitialPipeline();
     void renderEditor();
-    std::unique_ptr<EditorTexture> spawnTexture();
-    std::unique_ptr<EditorRenderOutput> spawnRenderOutput();
-    std::unique_ptr<EditorShader> spawnShader();
+    void resetLayout();
+    EditorTexture& spawnTexture();
+    EditorRenderOutput& spawnRenderOutput();
+    EditorLastFrame& spawnLastFrame();
+    EditorShader& spawnShader();
+    std::unique_ptr<Pipeline> buildPipeline();
+
+    friend struct EditorLastFrame;
 
 public:
     PipelineEditor();
     ~PipelineEditor();
-    void render(const std::function<void()>& build);
-    void load(const std::string& path);
-    void save(const std::string& path);
+    void build(ShaderToyContext& context);
+    void render(ShaderToyContext& context);
+    void loadSTTF(const std::string& path);
+    void saveSTTF(const std::string& path);
+    void loadFromShaderToy(const std::string& path);
 
     [[nodiscard]] bool isDirty() const noexcept {
         return mIsDirty;

@@ -12,6 +12,7 @@
     limitations under the License.
 */
 
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/ShaderToyContext.hpp"
 #include <cassert>
 #include <imgui.h>
@@ -22,8 +23,6 @@ ShaderToyContext::ShaderToyContext() : mRunning{ true } {
     reset();
 }
 void ShaderToyContext::tick() {
-    mFBSize = ImGui::GetWindowViewport()->Size;
-
     if(!mRunning)
         return;
     const auto time = static_cast<float>(
@@ -55,24 +54,36 @@ void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVe
     auto* drawList = ImGui::GetWindowDrawList();
     mBase = base;
     mSize = size;
-    if(mouse)
-        mMouse = mouse.value();
-    else {
-        mMouse.z = mMouse.w = 0.0f;
+    // Please see also https://shadertoyunofficial.wordpress.com/2016/07/20/special-shadertoy-features/
+    if(mouse) {
+        const auto m = mouse.value();
+        mMouse.x = m.x;
+        mMouse.y = m.y;
+        if(m.w > 0.0f) {  // just clicked
+            mMouse.z = mMouse.x;
+            mMouse.w = mMouse.y;
+        } else {
+            mMouse.w = -std::fabs(mMouse.w);
+        }
+    } else {
+        mMouse.z = -std::fabs(mMouse.z);
+        mMouse.w = -std::fabs(mMouse.w);
     }
 
     if(mPipeline) {
         drawList->AddCallback(
             [](const ImDrawList*, const ImDrawCmd* cmd) {
-                const ImVec2 clipOff = ImGui::GetDrawData()->DisplayPos;
-                const ImVec2 clipScale = ImGui::GetDrawData()->FramebufferScale;
+                const auto drawData = ImGui::GetDrawData();
+                const ImVec2 fbSize = drawData->DisplaySize * drawData->FramebufferScale;
+                const ImVec2 clipOff = drawData->DisplayPos;
+                const ImVec2 clipScale = drawData->FramebufferScale;
 
                 const auto ctx = static_cast<ShaderToyContext*>(cmd->UserCallbackData);
                 const ImVec2 clipMin((cmd->ClipRect.x - clipOff.x) * clipScale.x, (cmd->ClipRect.y - clipOff.y) * clipScale.y);
                 const ImVec2 clipMax((cmd->ClipRect.z - clipOff.x) * clipScale.x, (cmd->ClipRect.w - clipOff.y) * clipScale.y);
                 if(clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
                     return;
-                ctx->mPipeline->render(ctx->mFBSize, clipMin, clipMax, ctx->mBase, ctx->mSize,
+                ctx->mPipeline->render(fbSize, clipMin, clipMax, ctx->mBase - drawData->DisplayPos, ctx->mSize,
                                        { ctx->mTime, ctx->mTimeDelta, ImGui::GetIO().Framerate, ctx->mFrameCount, ctx->mMouse });
             },
             this);
@@ -80,11 +91,9 @@ void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVe
     } else
         drawList->AddRect(mBase, ImVec2{ mBase.x + mSize.x, mBase.y + mSize.y }, IM_COL32(255, 255, 0, 255));
 }
-void ShaderToyContext::compile(const std::string& src) {
-    if(auto pipeline = createPipeline(src)) {
-        mPipeline = std::move(pipeline);
-        reset();
-    }
+void ShaderToyContext::reset(std::unique_ptr<Pipeline> pipeline) {
+    mPipeline = std::move(pipeline);
+    reset();
 }
 
 SHADERTOY_NAMESPACE_END

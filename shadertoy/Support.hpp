@@ -37,5 +37,19 @@ auto scopeFail(F&& f) {
 using Clock = std::chrono::steady_clock;
 
 struct Error final : public std::exception {};
+#ifdef NDEBUG
+#if defined(__cpp_lib_unreachable)
+#define SHADERTOY_UNREACHABLE() std::unreachable()
+#elif defined(__GNUC__)
+#define SHADERTOY_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define SHADERTOY_UNREACHABLE() __assume(false)
+#else
+#define SHADERTOY_UNREACHABLE() reportFatalError("unreachable")  // fallback
+#endif
+#else
+#define SHADERTOY_UNREACHABLE() reportFatalError("unreachable")
+#endif
 [[noreturn]] void reportFatalError(std::string_view error);
+[[noreturn]] void reportNotImplemented();
 SHADERTOY_NAMESPACE_END

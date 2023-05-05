@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
+#include <misc/cpp/imgui_stdlib.h>
 #include <nfd.h>
 
 #define GL_SILENCE_DEPRECATION
@@ -33,6 +34,10 @@ namespace ed = ax::NodeEditor;
     std::exit(EXIT_FAILURE);
 }
 
+[[noreturn]] void reportNotImplemented() {
+    reportFatalError("Not implemented feature");
+}
+
 static void showCanvas(ShaderToyContext& ctx) {
     if(!ImGui::Begin("Canvas", nullptr)) {
         ImGui::End();
@@ -46,9 +51,11 @@ static void showCanvas(ShaderToyContext& ctx) {
         const auto base = ImGui::GetCursorScreenPos();
         std::optional<ImVec4> mouse = std::nullopt;
         ImGui::InvisibleButton("CanvasArea", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+        // See also https://shadertoyunofficial.wordpress.com/2016/07/20/special-shadertoy-features/
         if(ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             const auto pos = ImGui::GetMousePos();
-            mouse = ImVec4(pos.x - base.x, size.y - (pos.y - base.y), 1.0f, 1.0f);
+            mouse = ImVec4(pos.x - base.x, size.y - (pos.y - base.y), 1.0f,
+                           ImGui::IsMouseClicked(ImGuiMouseButton_Left) ? 1.0f : -1.0f);
         }
         ctx.render(base, size, mouse);
         ImGui::EndChild();
@@ -79,51 +86,28 @@ static void showCanvas(ShaderToyContext& ctx) {
     ImGui::End();
 }
 
-static ShaderToyEditor editor;
+static std::string url;
+static bool startImport = false;
 
-static void showShaderEditor(ShaderToyContext& ctx) {
-    if(!ImGui::Begin("Editor", nullptr)) {
-        ImGui::End();
-        return;
-    }
-
-    if(ImGui::BeginTabBar("##EditorTabBar", ImGuiTabBarFlags_Reorderable)) {
-        // pipeline
-        if(ImGui::BeginTabItem("Pipeline", nullptr, ImGuiTabItemFlags_NoReorder)) {
-            PipelineEditor::get().render([&] {
-                ctx.compile(editor.getText());  // TODO: error marker
-            });
-            ImGui::EndTabItem();
-        }
-
-        static bool open = true;
-        if(open && ImGui::BeginTabItem("Shader Editor", &open, ImGuiTabBarFlags_None)) {
-            editor.render(ImVec2(0, 0));
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
-    }
-    ImGui::End();
-}
-
-static void showMenu(ShaderToyContext& ctx) {
+static void showMenu() {
     if(ImGui::BeginMenu("File")) {
         if(ImGui::MenuItem("New Shader")) {
-            // src = "";
+            // TODO: reset
         }
         if(ImGui::MenuItem("Open Shader")) {
             nfdchar_t* path;
-            if(NFD_OpenDialog("glsl,frag,fsh", nullptr, &path) == NFD_OKAY) {
-                fmt::print(stderr, "{}", path);
+            if(NFD_OpenDialog("sttf", nullptr, &path) == NFD_OKAY) {
+                PipelineEditor::get().loadSTTF(path);
             }
         }
         if(ImGui::MenuItem("Save Shader")) {
             nfdchar_t* path;
             if(NFD_SaveDialog("sttf", nullptr, &path) == NFD_OKAY) {
-                fmt::print(stderr, "{}", path);
+                PipelineEditor::get().saveSTTF(path);
             }
         }
         if(ImGui::MenuItem("Import From shadertoy.com")) {
+            startImport = true;
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Exit")) {
@@ -133,8 +117,39 @@ static void showMenu(ShaderToyContext& ctx) {
     }
     if(ImGui::BeginMenu("Help")) {
         if(ImGui::MenuItem("About")) {
+            // TODO: about model
         }
         ImGui::EndMenu();
+    }
+}
+void showImportModal() {
+    if(startImport) {
+        ImGui::OpenPopup("Import Shader");
+        const std::string_view clipboardText = ImGui::GetClipboardText();
+        if(clipboardText.starts_with("https://www.shadertoy.com/view/")) {
+            url = clipboardText;
+        }
+        startImport = false;
+    }
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if(ImGui::BeginPopupModal("Import Shader", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted(ICON_FA_LINK "URL");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(ImGui::CalcTextSize("https://www.shadertoy.com/view/WWWWWWXXXX").x);
+        ImGui::InputText("##Url", &url, ImGuiInputTextFlags_CharsNoBlank);
+
+        if(ImGui::Button("Import", ImVec2(120, 0))) {
+            PipelineEditor::get().loadFromShaderToy(url);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SetItemDefaultFocus();
+        ImGui::SameLine();
+        if(ImGui::Button("Cancel", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
 }
 
@@ -151,7 +166,7 @@ int shaderToyMain(int argc, char** argv) {
 
     runnerParams.imGuiWindowParams.showMenuBar = true;
     runnerParams.imGuiWindowParams.showMenu_App_Quit = false;
-    runnerParams.callbacks.ShowMenus = [&] { showMenu(ctx); };
+    runnerParams.callbacks.ShowMenus = [] { showMenu(); };
 
     runnerParams.callbacks.LoadAdditionalFonts = [] { HelloImGui::ImGuiDefaultSettings::LoadDefaultFont_WithFontAwesomeIcons(); };
 
@@ -177,7 +192,7 @@ int shaderToyMain(int argc, char** argv) {
     canvasWindow.dockSpaceName = "LeftSpace";
     canvasWindow.GuiFunction = [&ctx] {
         if(!__glewCreateProgram && glewInit() != GLEW_OK)
-            reportFatalError("Failed to initialize glew");
+            reportFatalError("Fai led to initialize glew");
 
         ctx.tick();
         showCanvas(ctx);
@@ -189,7 +204,10 @@ int shaderToyMain(int argc, char** argv) {
     HelloImGui::DockableWindow editorWindow;
     editorWindow.label = "Editor";
     editorWindow.dockSpaceName = "MainDockSpace";
-    editorWindow.GuiFunction = [&] { showShaderEditor(ctx); };
+    editorWindow.GuiFunction = [&] {
+        PipelineEditor::get().render(ctx);
+        showImportModal();
+    };
     runnerParams.dockingParams.dockableWindows = { canvasWindow, outputWindow, editorWindow };
 
     HelloImGui::Run(runnerParams);
