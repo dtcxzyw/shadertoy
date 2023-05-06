@@ -48,10 +48,12 @@ uniform float     iTimeDelta;            // render time (in seconds)
 uniform float     iFrameRate;            // shader frame rate
 uniform int       iFrame;                // shader playback frame
 uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
+uniform vec4      iDate;                 // Year, month, day, time in seconds in .xyzw
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
 uniform sampler2D iChannel3;
+uniform vec3 iChannelResolution[4];
 
 )";
 
@@ -131,13 +133,15 @@ public:
 class RenderPass final {
     GLuint mProgram;
     DoubleBufferedFB mBuffer;
-    GLint mResolutionLocation;
-    GLint mTimeLocation;
-    GLint mTimeDeltaLocation;
-    GLint mFrameRateLocation;
-    GLint mFrameLocation;
-    GLint mMouseLocation;
-    GLint mChannelLocations[4];
+    GLint mLocationResolution;
+    GLint mLocationTime;
+    GLint mLocationTimeDelta;
+    GLint mLocationFrameRate;
+    GLint mLocationFrame;
+    GLint mLocationMouse;
+    GLint mLocationDate;
+    GLint mLocationChannel[4];
+    GLint mLocationChannelResolution[4];
     std::vector<Channel> mChannels;
 
 public:
@@ -167,21 +171,26 @@ public:
         glLinkProgram(mProgram);
         checkShaderCompileError(mProgram, "PROGRAM");
 
-        auto& mChannel0Location = mChannelLocations[0];
-        auto& mChannel1Location = mChannelLocations[1];
-        auto& mChannel2Location = mChannelLocations[2];
-        auto& mChannel3Location = mChannelLocations[3];
-#define SHADERTOY_GET_UNIFORM_LOCATION(NAME) m##NAME##Location = glGetUniformLocation(mProgram, "i" #NAME)
+        auto& mLocationChannel0 = mLocationChannel[0];
+        auto& mLocationChannel1 = mLocationChannel[1];
+        auto& mLocationChannel2 = mLocationChannel[2];
+        auto& mLocationChannel3 = mLocationChannel[3];
+#define SHADERTOY_GET_UNIFORM_LOCATION(NAME) mLocation##NAME = glGetUniformLocation(mProgram, "i" #NAME)
         SHADERTOY_GET_UNIFORM_LOCATION(Resolution);
         SHADERTOY_GET_UNIFORM_LOCATION(Time);
         SHADERTOY_GET_UNIFORM_LOCATION(TimeDelta);
         SHADERTOY_GET_UNIFORM_LOCATION(FrameRate);
         SHADERTOY_GET_UNIFORM_LOCATION(Frame);
         SHADERTOY_GET_UNIFORM_LOCATION(Mouse);
+        SHADERTOY_GET_UNIFORM_LOCATION(Date);
         SHADERTOY_GET_UNIFORM_LOCATION(Channel0);
         SHADERTOY_GET_UNIFORM_LOCATION(Channel1);
         SHADERTOY_GET_UNIFORM_LOCATION(Channel2);
         SHADERTOY_GET_UNIFORM_LOCATION(Channel3);
+        SHADERTOY_GET_UNIFORM_LOCATION(ChannelResolution[0]);
+        SHADERTOY_GET_UNIFORM_LOCATION(ChannelResolution[1]);
+        SHADERTOY_GET_UNIFORM_LOCATION(ChannelResolution[2]);
+        SHADERTOY_GET_UNIFORM_LOCATION(ChannelResolution[3]);
 #undef SHADERTOY_GET_UNIFORM_LOCATION
     }
     RenderPass(const RenderPass&) = delete;
@@ -223,42 +232,47 @@ public:
 
         // update texture
         for(auto& channel : mChannels) {
-            if(mChannelLocations[channel.slot] == -1)
+            if(mLocationChannel[channel.slot] == -1)
                 continue;
-            glUniform1i(mChannelLocations[channel.slot], static_cast<GLint>(channel.slot));
+            glUniform1i(mLocationChannel[channel.slot], static_cast<GLint>(channel.slot));
+            const auto texSize = channel.size.value_or(size);
+            if(mLocationChannelResolution[channel.slot] != -1)
+                glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
             glActiveTexture(GL_TEXTURE0 + channel.slot);
             glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(channel.tex.get()));
             const GLint wrapMode = [&] {
                 switch(channel.wrapMode) {
-                    case Channel::Wrap::Clamp:
+                    case Wrap::Clamp:
                         return GL_CLAMP_TO_EDGE;
-                    case Channel::Wrap::Repeat:
+                    case Wrap::Repeat:
                         return GL_REPEAT;
                 }
                 SHADERTOY_UNREACHABLE();
             }();
             const GLint minFilter = [&] {
                 switch(channel.filter) {
-                    case Channel::Filter::Mipmap:
+                    case Filter::Mipmap:
                         return GL_LINEAR_MIPMAP_LINEAR;
-                    case Channel::Filter::Nearest:
+                    case Filter::Nearest:
                         return GL_NEAREST;
-                    case Channel::Filter::Linear:
+                    case Filter::Linear:
                         return GL_LINEAR;
                 }
                 SHADERTOY_UNREACHABLE();
             }();
             const GLint magFilter = [&] {
                 switch(channel.filter) {
-                    case Channel::Filter::Nearest:
+                    case Filter::Nearest:
                         return GL_NEAREST;
-                    case Channel::Filter::Mipmap:
+                    case Filter::Mipmap:
                         [[fallthrough]];
-                    case Channel::Filter::Linear:
+                    case Filter::Linear:
                         return GL_LINEAR;
                 }
                 SHADERTOY_UNREACHABLE();
             }();
+            if(channel.filter == Filter::Mipmap)
+                glGenerateMipmap(GL_TEXTURE_2D);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
@@ -266,18 +280,20 @@ public:
         }
 
         // update uniform
-        if(mResolutionLocation != -1)
-            glUniform3f(mResolutionLocation, size.x, size.y, 0.0f);
-        if(mTimeLocation != -1)
-            glUniform1f(mTimeLocation, uniform.time);
-        if(mTimeDeltaLocation != -1)
-            glUniform1f(mTimeDeltaLocation, uniform.timeDelta);
-        if(mFrameRateLocation != -1)
-            glUniform1f(mFrameRateLocation, uniform.frameRate);
-        if(mFrameLocation != -1)
-            glUniform1i(mFrameLocation, uniform.frame);
-        if(mMouseLocation != -1)
-            glUniform4f(mMouseLocation, uniform.mouse.x, uniform.mouse.y, uniform.mouse.z, uniform.mouse.w);
+        if(mLocationResolution != -1)
+            glUniform3f(mLocationResolution, size.x, size.y, 0.0f);
+        if(mLocationTime != -1)
+            glUniform1f(mLocationTime, uniform.time);
+        if(mLocationTimeDelta != -1)
+            glUniform1f(mLocationTimeDelta, uniform.timeDelta);
+        if(mLocationFrameRate != -1)
+            glUniform1f(mLocationFrameRate, uniform.frameRate);
+        if(mLocationFrame != -1)
+            glUniform1i(mLocationFrame, uniform.frame);
+        if(mLocationMouse != -1)
+            glUniform4f(mLocationMouse, uniform.mouse.x, uniform.mouse.y, uniform.mouse.z, uniform.mouse.w);
+        if(mLocationDate != -1)
+            glUniform4f(mLocationDate, uniform.date.x, uniform.date.y, uniform.date.z, uniform.date.w);
 
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
         if(buffer)
@@ -286,11 +302,49 @@ public:
     }
 };
 
+class GLTextureObject final : public TextureObject {
+    GLuint mTex;
+    ImVec2 mSize;
+
+public:
+    GLTextureObject(const uint32_t width, const uint32_t height, const uint32_t* data)
+        : mSize{ static_cast<float>(width), static_cast<float>(height) } {
+        glGenTextures(1, &mTex);
+        glBindTexture(GL_TEXTURE_2D, mTex);
+        if(data) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RGBA,
+                         GL_UNSIGNED_BYTE, data);  // R8G8B8A8
+            glGenerateMipmap(GL_TEXTURE_2D);
+        }
+        glBindTexture(GL_TEXTURE_2D, GL_NONE);
+    }
+    ~GLTextureObject() override {
+        glDeleteTextures(1, &mTex);
+    }
+    [[nodiscard]] TextureId getTexture() const override {
+        return mTex;
+    }
+    [[nodiscard]] ImVec2 size() const override {
+        return mSize;
+    }
+};
+
+std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data) {
+    return std::make_unique<GLTextureObject>(width, height, data);
+}
+
+struct DynamicTexture final {
+    std::unique_ptr<GLTextureObject> tex;
+    std::vector<uint32_t> data;
+    std::function<void(uint32_t*)> update;
+};
+
 class OpenGLPipeline final : public Pipeline {
     GLuint mVAO{};
     GLuint mVBO{};
     std::vector<std::unique_ptr<FrameBuffer>> mFrameBuffers;
     std::vector<std::unique_ptr<RenderPass>> mRenderPasses;
+    std::vector<DynamicTexture> mDynamicTextures;
 
 public:
     explicit OpenGLPipeline() {
@@ -323,8 +377,23 @@ public:
 
     void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, const ImVec2 base, const ImVec2 size,
                 const ShaderToyUniform& uniform) override {
+        for(auto& [tex, data, update] : mDynamicTextures) {
+            update(data.data());
+            const auto texId = static_cast<GLuint>(tex->getTexture());
+            glBindTexture(GL_TEXTURE_2D, texId);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(tex->size().x), static_cast<GLsizei>(tex->size().y), 0,
+                         GL_RGBA, GL_UNSIGNED_BYTE, data.data());  // R8G8B8A8
+            glBindTexture(GL_TEXTURE_2D, GL_NONE);
+        }
         for(const auto& pass : mRenderPasses)
             pass->render(frameBufferSize, clipMin, clipMax, base, size, uniform, mVAO, mVBO);
+    }
+
+    TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) override {
+        mDynamicTextures.emplace_back(std::make_unique<GLTextureObject>(width, height, nullptr),
+                                      std::vector<uint32_t>(static_cast<size_t>(width) * height), std::move(update));
+        const auto& tex = mDynamicTextures.back();
+        return tex.tex->getTexture();
     }
 };
 
@@ -334,35 +403,6 @@ std::unique_ptr<Pipeline> createPipeline() {
     } catch(const Error&) {
         return {};
     }
-}
-
-class GLTextureObject final : public TextureObject {
-    GLuint mTex;
-    ImVec2 mSize;
-
-public:
-    GLTextureObject(const uint32_t width, const uint32_t height, const uint32_t* data)
-        : mSize{ static_cast<float>(width), static_cast<float>(height) } {
-        glGenTextures(1, &mTex);
-        glBindTexture(GL_TEXTURE_2D, mTex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(width), static_cast<GLsizei>(height), 0, GL_RGBA,
-                     GL_UNSIGNED_BYTE, data);  // R8G8B8A8
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, GL_NONE);
-    }
-    ~GLTextureObject() override {
-        glDeleteTextures(1, &mTex);
-    }
-    [[nodiscard]] TextureId getTexture() const override {
-        return mTex;
-    }
-    [[nodiscard]] ImVec2 size() const override {
-        return mSize;
-    }
-};
-
-std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data) {
-    return std::make_unique<GLTextureObject>(width, height, data);
 }
 
 SHADERTOY_NAMESPACE_END

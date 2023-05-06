@@ -20,15 +20,18 @@
 SHADERTOY_NAMESPACE_BEGIN
 
 class ShaderToyContext final {
-    Clock::time_point mStartTime;
-    Clock::time_point mPauseTime;
+    using SystemClock = std::chrono::system_clock;
+    SystemClock::time_point mStartTime;
+    SystemClock::time_point mPauseTime;
     float mTime{};
     float mTimeDelta{};
     int32_t mFrameCount{};
+    float mFrameRate{};
     bool mRunning;
     ImVec2 mBase;
     ImVec2 mSize;
     ImVec4 mMouse{ 0.0f, 0.0f, -1.0f, -1.0f };
+    ImVec4 mDate;
 
     std::unique_ptr<Pipeline> mPipeline;
 
@@ -46,6 +49,10 @@ public:
     void reset();
     void render(ImVec2 base, ImVec2 size, const std::optional<ImVec4>& mouse);
     void reset(std::unique_ptr<Pipeline> pipeline);
+
+    [[nodiscard]] ImVec4 getMouseStatus() const noexcept {
+        return mMouse;
+    }
     [[nodiscard]] bool isValid() const noexcept {
         return mPipeline.get();
     }

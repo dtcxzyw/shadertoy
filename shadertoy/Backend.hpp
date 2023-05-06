@@ -13,6 +13,7 @@
 */
 
 #pragma once
+#include "STTF.hpp"
 #include "shadertoy/Config.hpp"
 #include <hello_imgui/hello_imgui.h>
 #include <memory>
@@ -41,6 +42,7 @@ struct ShaderToyUniform final {
     float frameRate;
     int32_t frame;
     ImVec4 mouse;
+    ImVec4 date;
 };
 
 class TextureObject {
@@ -64,8 +66,9 @@ using DoubleBufferedFB = DoubleBuffered<FrameBuffer*>;
 struct Channel final {
     uint32_t slot;
     DoubleBufferedTex tex;
-    enum class Filter { Mipmap, Nearest, Linear } filter;
-    enum class Wrap { Clamp, Repeat } wrapMode;
+    Filter filter;
+    Wrap wrapMode;
+    std::optional<ImVec2> size;
 };
 
 class Pipeline {
@@ -81,6 +84,7 @@ public:
     virtual void addPass(const std::string& src, DoubleBufferedFB target, std::vector<Channel> channels) = 0;
     virtual void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
                         const ShaderToyUniform& uniform) = 0;
+    virtual TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) = 0;
 };
 
 std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data);

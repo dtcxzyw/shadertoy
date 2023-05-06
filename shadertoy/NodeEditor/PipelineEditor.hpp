@@ -127,11 +127,23 @@ struct EditorTexture final : EditorNode {
     }
 };
 
+struct EditorKeyboard final : EditorNode {
+    EditorKeyboard(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    std::unique_ptr<Node> toSTTF() const override;
+    void fromSTTF(Node& node) override;
+
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::Keyboard;
+    }
+};
+
 struct EditorLink final {
     ed::LinkId ID;
 
     ed::PinId StartPinID;
     ed::PinId EndPinID;
+    Filter filter = Filter::Linear;
+    Wrap wrapMode = Wrap::Repeat;
 
     EditorLink(ed::LinkId id, ed::PinId startPinId, ed::PinId endPinId) : ID(id), StartPinID(startPinId), EndPinID(endPinId) {}
 };
@@ -150,6 +162,9 @@ class PipelineEditor final {
     ed::LinkId contextLinkId;
     std::vector<const char*> shaderNodeNames;
     std::vector<EditorNode*> shaderNodes;
+    bool shouldZoomToContent = false;
+    bool shouldResetLayout = false;
+    bool shouldBuildPipeline = false;
 
     uint32_t nextId();
     bool isPinLinked(ed::PinId id) const;
@@ -166,6 +181,7 @@ class PipelineEditor final {
     EditorRenderOutput& spawnRenderOutput();
     EditorLastFrame& spawnLastFrame();
     EditorShader& spawnShader();
+    EditorKeyboard& spawnKeyboard();
     std::unique_ptr<Pipeline> buildPipeline();
 
     friend struct EditorLastFrame;

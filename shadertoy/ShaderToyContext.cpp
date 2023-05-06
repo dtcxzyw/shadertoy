@@ -15,6 +15,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/ShaderToyContext.hpp"
 #include <cassert>
+#include <ctime>
 #include <imgui.h>
 
 SHADERTOY_NAMESPACE_BEGIN
@@ -25,28 +26,37 @@ ShaderToyContext::ShaderToyContext() : mRunning{ true } {
 void ShaderToyContext::tick() {
     if(!mRunning)
         return;
+    const auto now = SystemClock::now();
     const auto time = static_cast<float>(
-        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - mStartTime).count()) * 1e-9);
+        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - mStartTime).count()) * 1e-9);
     mTimeDelta = time - mTime;
     mTime = time;
     ++mFrameCount;
+    mFrameRate = ImGui::GetIO().Framerate;
+
+    const auto current = SystemClock::to_time_t(now);
+    const auto tm = std::localtime(&current);
+    mDate = { static_cast<float>(tm->tm_year + 1900 - 1), static_cast<float>(tm->tm_mon), static_cast<float>(tm->tm_mday),
+              static_cast<float>(tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec) +
+                  static_cast<float>(now.time_since_epoch().count() % SystemClock::period::den) /
+                      static_cast<float>(SystemClock::period::den) };
 }
 void ShaderToyContext::pause() {
     assert(mRunning);
     mRunning = false;
     mTimeDelta = 0.0f;
-    mPauseTime = Clock::now();
+    mPauseTime = SystemClock::now();
 }
 void ShaderToyContext::resume() {
     assert(!mRunning);
     mRunning = true;
     if(mTime == 0.0f)
-        mStartTime = Clock::now();
+        mStartTime = SystemClock::now();
     else
-        mStartTime += Clock::now() - mPauseTime;
+        mStartTime += SystemClock::now() - mPauseTime;
 }
 void ShaderToyContext::reset() {
-    mStartTime = Clock::now();
+    mStartTime = SystemClock::now();
     mTime = mTimeDelta = 0.0f;
     mFrameCount = 0;
 }
@@ -83,8 +93,9 @@ void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVe
                 const ImVec2 clipMax((cmd->ClipRect.z - clipOff.x) * clipScale.x, (cmd->ClipRect.w - clipOff.y) * clipScale.y);
                 if(clipMax.x <= clipMin.x || clipMax.y <= clipMin.y)
                     return;
-                ctx->mPipeline->render(fbSize, clipMin, clipMax, ctx->mBase - drawData->DisplayPos, ctx->mSize,
-                                       { ctx->mTime, ctx->mTimeDelta, ImGui::GetIO().Framerate, ctx->mFrameCount, ctx->mMouse });
+                ctx->mPipeline->render(
+                    fbSize, clipMin, clipMax, ctx->mBase - drawData->DisplayPos, ctx->mSize,
+                    { ctx->mTime, ctx->mTimeDelta, ctx->mFrameRate, ctx->mFrameCount, ctx->mMouse, ctx->mDate });
             },
             this);
         drawList->AddCallback(ImDrawCallback_ResetRenderState, nullptr);

@@ -20,7 +20,9 @@
 #include <hello_imgui/image_from_asset.h>
 #include <httplib.h>
 #include <imgui/misc/cpp/imgui_stdlib.h>
+#include <magic_enum.hpp>
 #include <nfd.h>
+#include <nlohmann/json.hpp>
 #include <queue>
 #include <stb_image.h>
 
@@ -84,10 +86,8 @@ PipelineEditor::PipelineEditor() {
     mHeaderBackground = HelloImGui::ImTextureIdFromAsset("BlueprintBackground.png");
 
     setupInitialPipeline();
-
-    ed::SetCurrentEditor(mCtx);
-    resetLayout();
-    ed::SetCurrentEditor(nullptr);
+    shouldBuildPipeline = true;
+    shouldResetLayout = true;
 }
 
 PipelineEditor::~PipelineEditor() {
@@ -95,8 +95,65 @@ PipelineEditor::~PipelineEditor() {
 }
 
 void PipelineEditor::resetLayout() {
-    // TODO: set node position for DAG
-    ed::NavigateToContent();
+    std::unordered_map<EditorNode*, std::vector<std::pair<EditorNode*, uint32_t>>> graph;
+    std::unordered_map<EditorNode*, uint32_t> degree;
+    for(auto& link : mLinks) {
+        auto u = findPin(link.StartPinID);
+        auto v = findPin(link.EndPinID);
+        auto idx = static_cast<uint32_t>(v - v->Node->Inputs.data());
+        graph[v->Node].emplace_back(u->Node, idx);
+        ++degree[u->Node];
+    }
+
+    std::queue<EditorNode*> q;
+    std::unordered_map<EditorNode*, uint32_t> depth;
+    for(auto& node : mNodes)
+        if(!degree.contains(node.get()))
+            q.push(node.get());
+    while(!q.empty()) {
+        auto u = q.front();
+        q.pop();
+        for(auto [v, idx] : graph[u]) {
+            depth[v] = std::max(depth[v], depth[u] + 1);
+            if(--degree[v] == 0) {
+                q.push(v);
+            }
+        }
+    }
+
+    std::map<uint32_t, std::vector<EditorNode*>> layers;
+    std::unordered_map<EditorNode*, std::pair<double, uint32_t>> barycenter;
+    for(auto [u, d] : depth)
+        layers[d].push_back(u);
+
+    constexpr auto width = 400.0f, height = 300.0f;
+    float selfX = 0;
+    for(auto& [d, layer] : layers) {
+        auto getBarycenter = [&](EditorNode* u) {
+            if(auto iter = barycenter.find(u); iter != barycenter.cend()) {
+                return iter->second.first / iter->second.second;
+            }
+            return 0.0;
+        };
+        std::sort(layer.begin(), layer.end(), [&](EditorNode* u, EditorNode* v) { return getBarycenter(u) < getBarycenter(v); });
+        double pos = 0;
+        float selfY = 0;
+        for(auto u : layer) {
+            ++pos;
+            for(auto [v, idx] : graph[u]) {
+                auto& ref = barycenter[v];
+                ref.first += pos + idx;
+                ++ref.second;
+            }
+            pos += static_cast<double>(u->Inputs.size());
+
+            ed::SetNodePosition(u->ID, ImVec2{ selfX, selfY });
+            selfY += height;
+        }
+        selfX -= width;
+    }
+
+    shouldZoomToContent = true;
 }
 
 bool PipelineEditor::isUniqueName(const std::string_view& name, const EditorNode* exclude) const {
@@ -112,7 +169,7 @@ std::string PipelineEditor::generateUniqueName(const std::string_view& base) con
     if(isUniqueName(base, nullptr))
         return { base.data(), base.size() };
     for(uint32_t idx = 1;; ++idx) {
-        if(const auto str = fmt::format("{}{}", base, idx); isUniqueName(str, nullptr)) {
+        if(auto str = fmt::format("{}{}", base, idx); isUniqueName(str, nullptr)) {
             return str;
         }
     }
@@ -135,6 +192,11 @@ static auto& buildNode(std::vector<std::unique_ptr<EditorNode>>& nodes, std::uni
 }
 EditorTexture& PipelineEditor::spawnTexture() {
     auto ret = std::make_unique<EditorTexture>(nextId(), generateUniqueName("Texture"));
+    ret->Outputs.emplace_back(nextId(), "Output", NodeType::Image);
+    return buildNode(mNodes, std::move(ret));
+}
+EditorKeyboard& PipelineEditor::spawnKeyboard() {
+    auto ret = std::make_unique<EditorKeyboard>(nextId(), generateUniqueName("Keyboard"));
     ret->Outputs.emplace_back(nextId(), "Output", NodeType::Image);
     return buildNode(mNodes, std::move(ret));
 }
@@ -299,11 +361,27 @@ void PipelineEditor::renderEditor() {
 
             builder.Input(input.ID);
             ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-            drawPinIcon(input, isPinLinked(input.ID), static_cast<int>(alpha * 255));
+            bool linked = isPinLinked(input.ID);
+            drawPinIcon(input, linked, static_cast<int>(alpha * 255));
             ImGui::Spring(0);
             if(!input.Name.empty()) {
                 ImGui::TextUnformatted(input.Name.c_str());
                 ImGui::Spring(0);
+            }
+            if(linked && node->getClass() == NodeClass::GLSLShader) {
+                for(auto& link : mLinks) {
+                    if(link.EndPinID == input.ID) {
+                        if(ImGui::Button(magic_enum::enum_name(link.filter).data())) {
+                            link.filter =
+                                static_cast<Filter>((static_cast<uint32_t>(link.filter) + 1) % magic_enum::enum_count<Filter>());
+                        }
+                        if(ImGui::Button(magic_enum::enum_name(link.wrapMode).data())) {
+                            link.wrapMode =
+                                static_cast<Wrap>((static_cast<uint32_t>(link.wrapMode) + 1) % magic_enum::enum_count<Wrap>());
+                        }
+                        break;
+                    }
+                }
             }
             ImGui::PopStyleVar();
             builder.EndInput();
@@ -484,6 +562,8 @@ void PipelineEditor::renderEditor() {
             node = &spawnTexture();
         if(ImGui::MenuItem("LastFrame"))
             node = &spawnLastFrame();
+        if(ImGui::MenuItem("Keyboard"))
+            node = &spawnKeyboard();
 
         ImGui::Separator();
         if(ImGui::MenuItem("Shader"))
@@ -530,7 +610,7 @@ void PipelineEditor::renderEditor() {
 }
 
 std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
-    std::unordered_map<EditorNode*, std::vector<std::pair<EditorNode*, uint32_t>>> graph;
+    std::unordered_map<EditorNode*, std::vector<std::tuple<EditorNode*, uint32_t, EditorLink*>>> graph;
     EditorNode* directRenderNode = nullptr;
     std::unordered_map<EditorNode*, uint32_t> degree;
     EditorNode* sinkNode = nullptr;
@@ -538,7 +618,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
         auto u = findPin(link.StartPinID);
         auto v = findPin(link.EndPinID);
         auto idx = static_cast<uint32_t>(v - v->Node->Inputs.data());
-        graph[v->Node].emplace_back(u->Node, idx);
+        graph[v->Node].emplace_back(u->Node, idx, &link);
         ++degree[u->Node];
         if(v->Node->getClass() == NodeClass::RenderOutput && u->Node->getClass() == NodeClass::GLSLShader) {
             sinkNode = v->Node;
@@ -555,6 +635,16 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
     std::queue<EditorNode*> q;
     std::vector<EditorNode*> order;
     q.push(sinkNode);
+    std::unordered_set<EditorNode*> weakRef;
+    for(auto& node : mNodes) {
+        if(node->getClass() == NodeClass::LastFrame) {
+            weakRef.insert(dynamic_cast<EditorLastFrame*>(node.get())->lastFrame);
+        }
+    }
+    for(auto node : weakRef) {
+        if(!degree.contains(node))
+            q.push(node);
+    }
     while(!q.empty()) {
         auto u = q.front();
         q.pop();
@@ -562,7 +652,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
         order.push_back(u);
 
         if(auto it = graph.find(u); it != graph.cend()) {
-            for(auto [v, idx] : it->second) {
+            for(auto [v, idx, link] : it->second) {
                 visited.insert(v);
                 if(--degree[v] == 0) {
                     q.push(v);
@@ -580,6 +670,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
 
     auto pipeline = createPipeline();
     std::unordered_map<EditorNode*, DoubleBufferedTex> textureMap;
+    std::unordered_map<EditorNode*, ImVec2> textureSizeMap;
     std::unordered_map<EditorNode*, DoubleBufferedFB> frameBufferMap;
     std::unordered_set<EditorNode*> requireDoubleBuffer;
     for(auto node : order) {
@@ -614,11 +705,16 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 auto target = frameBufferMap.at(node);
                 std::vector<Channel> channels;
                 if(auto it = graph.find(node); it != graph.cend()) {
-                    for(auto [v, idx] : it->second) {
-                        channels.emplace_back(idx, textureMap.at(v), Channel::Filter::Linear,
-                                              Channel::Wrap::Repeat);  // TODO: filter & wrap mode
+                    for(auto [v, idx, link] : it->second) {
+                        std::optional<ImVec2> size = std::nullopt;
+                        if(auto iter = textureSizeMap.find(v); iter != textureSizeMap.cend())
+                            size = iter->second;
+                        channels.emplace_back(idx, textureMap.at(v), link->filter, link->wrapMode, size);
                     }
                 }
+                // TODO: error markers
+                auto guard = scopeFail(
+                    [&] { HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to compile shader %s", node->Name.c_str()); });
                 pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), target, std::move(channels));
                 if(target.t1)
                     textureMap.emplace(node, DoubleBufferedTex{ target.t1->getTexture(), target.t2->getTexture() });
@@ -634,7 +730,120 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 break;
             }
             case NodeClass::Texture: {
-                textureMap.emplace(node, DoubleBufferedTex{ dynamic_cast<EditorTexture*>(node)->textureId->getTexture() });
+                auto& textureId = dynamic_cast<EditorTexture*>(node)->textureId;
+                textureSizeMap.emplace(node, textureId->size());
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture() });
+                break;
+            }
+            case NodeClass::Keyboard: {
+                textureSizeMap.emplace(node, ImVec2{ 256, 3 });
+                textureMap.emplace(node, DoubleBufferedTex{ pipeline->createDynamicTexture(256, 3, [](uint32_t* data) {
+                                       // See also
+                                       // https://shadertoyunofficial.wordpress.com/2016/07/20/special-shadertoy-features/
+                                       // FIXME: remapping keys
+                                       constexpr std::pair<uint32_t, ImGuiKey> mapping[] = {
+                                           { 8, ImGuiKey_Backspace },
+                                           { 9, ImGuiKey_Tab },
+                                           { 13, ImGuiKey_Enter },
+                                           { 16, ImGuiKey_LeftShift },
+                                           { 16, ImGuiKey_RightShift },
+                                           { 17, ImGuiKey_LeftCtrl },
+                                           { 17, ImGuiKey_RightCtrl },
+                                           { 19, ImGuiKey_Pause },
+                                           { 20, ImGuiKey_CapsLock },
+                                           { 27, ImGuiKey_Escape },
+                                           { 32, ImGuiKey_Space },
+                                           { 33, ImGuiKey_PageUp },
+                                           { 36, ImGuiKey_Home },
+                                           { 37, ImGuiKey_LeftArrow },
+                                           { 38, ImGuiKey_UpArrow },
+                                           { 39, ImGuiKey_RightArrow },
+                                           { 40, ImGuiKey_DownArrow },
+                                           { 44, ImGuiKey_PrintScreen },
+                                           { 45, ImGuiKey_Insert },
+                                           { 46, ImGuiKey_Delete },
+                                           { 48, ImGuiKey_0 },
+                                           { 49, ImGuiKey_1 },
+                                           { 50, ImGuiKey_2 },
+                                           { 51, ImGuiKey_3 },
+                                           { 52, ImGuiKey_4 },
+                                           { 53, ImGuiKey_5 },
+                                           { 54, ImGuiKey_6 },
+                                           { 55, ImGuiKey_7 },
+                                           { 56, ImGuiKey_8 },
+                                           { 57, ImGuiKey_9 },
+                                           { 65, ImGuiKey_A },
+                                           { 66, ImGuiKey_B },
+                                           { 67, ImGuiKey_C },
+                                           { 68, ImGuiKey_D },
+                                           { 69, ImGuiKey_E },
+                                           { 70, ImGuiKey_F },
+                                           { 71, ImGuiKey_G },
+                                           { 72, ImGuiKey_H },
+                                           { 73, ImGuiKey_I },
+                                           { 74, ImGuiKey_J },
+                                           { 75, ImGuiKey_K },
+                                           { 76, ImGuiKey_L },
+                                           { 77, ImGuiKey_M },
+                                           { 78, ImGuiKey_N },
+                                           { 79, ImGuiKey_O },
+                                           { 80, ImGuiKey_P },
+                                           { 81, ImGuiKey_Q },
+                                           { 82, ImGuiKey_R },
+                                           { 83, ImGuiKey_S },
+                                           { 84, ImGuiKey_T },
+                                           { 85, ImGuiKey_U },
+                                           { 86, ImGuiKey_V },
+                                           { 87, ImGuiKey_W },
+                                           { 88, ImGuiKey_X },
+                                           { 89, ImGuiKey_Y },
+                                           { 90, ImGuiKey_Z },
+                                           { 96, ImGuiKey_Keypad0 },
+                                           { 97, ImGuiKey_Keypad1 },
+                                           { 98, ImGuiKey_Keypad2 },
+                                           { 99, ImGuiKey_Keypad3 },
+                                           { 100, ImGuiKey_Keypad4 },
+                                           { 101, ImGuiKey_Keypad5 },
+                                           { 102, ImGuiKey_Keypad6 },
+                                           { 103, ImGuiKey_Keypad7 },
+                                           { 104, ImGuiKey_Keypad8 },
+                                           { 105, ImGuiKey_Keypad9 },
+                                           { 106, ImGuiKey_KeypadMultiply },
+                                           { 109, ImGuiKey_KeypadSubtract },
+                                           { 110, ImGuiKey_KeypadDecimal },
+                                           { 111, ImGuiKey_KeypadDivide },
+                                           { 112, ImGuiKey_F1 },
+                                           { 113, ImGuiKey_F2 },
+                                           { 114, ImGuiKey_F3 },
+                                           { 115, ImGuiKey_F4 },
+                                           { 116, ImGuiKey_F5 },
+                                           { 117, ImGuiKey_F6 },
+                                           { 118, ImGuiKey_F7 },
+                                           { 119, ImGuiKey_F8 },
+                                           { 120, ImGuiKey_F9 },
+                                           { 121, ImGuiKey_F10 },
+                                           { 122, ImGuiKey_F11 },
+                                           { 123, ImGuiKey_F12 },
+                                           { 145, ImGuiKey_ScrollLock },
+                                           { 144, ImGuiKey_NumLock },
+                                           { 187, ImGuiKey_Equal },
+                                           { 189, ImGuiKey_Minus },
+                                           { 192, ImGuiKey_GraveAccent },
+                                           { 219, ImGuiKey_LeftBracket },
+                                           { 220, ImGuiKey_Backslash },
+                                           { 221, ImGuiKey_RightBracket },
+                                       };
+                                       auto getKey = [&](uint32_t x, uint32_t y) -> uint32_t& { return data[x + y * 256]; };
+                                       for(auto [idx, key] : mapping) {
+                                           const auto down = ImGui::IsKeyDown(key);
+                                           const auto pressed = ImGui::IsKeyPressed(key, false);
+                                           constexpr uint32_t mask = 0xffffffff;
+                                           getKey(idx, 0) = down ? mask : 0;
+                                           getKey(idx, 1) = pressed ? mask : 0;
+                                           if(pressed)
+                                               getKey(idx, 2) ^= mask;
+                                       }
+                                   }) });
                 break;
             }
             default:
@@ -669,20 +878,26 @@ void PipelineEditor::render(ShaderToyContext& context) {
 
             ed::SetCurrentEditor(mCtx);
             // toolbar
-            if(!context.isValid() || ImGui::Button(ICON_FA_PLAY " Build")) {
+            if(shouldBuildPipeline || ImGui::Button(ICON_FA_PLAY " Build")) {
                 build(context);
+                shouldBuildPipeline = false;
             }
             ImGui::SameLine();
             if(ImGui::Button("Zoom to Context")) {
-                ed::NavigateToContent();
+                shouldZoomToContent = true;
             }
-            /*
-            // TODO: Layout
+            if(shouldZoomToContent) {
+                ed::NavigateToContent();
+                shouldZoomToContent = false;
+            }
             ImGui::SameLine();
             if(ImGui::Button("Reset layout")) {
-                resetLayout();
+                shouldResetLayout = true;
             }
-            */
+            if(shouldResetLayout) {
+                resetLayout();
+                shouldResetLayout = false;
+            }
 
             renderEditor();
             ed::SetCurrentEditor(nullptr);
@@ -753,6 +968,15 @@ void EditorTexture::renderContent() {
             }
         }();
     }
+    if(textureId && ImGui::Button("Vertical Flip")) {
+        const auto width = static_cast<uint32_t>(textureId->size().x);
+        const auto height = static_cast<uint32_t>(textureId->size().y);
+        for(uint32_t i = 0, j = height - 1; i < j; ++i, --j) {
+            for(uint32_t k = 0; k < width; ++k)
+                std::swap(pixel[i * width + k], pixel[j * width + k]);
+        }
+        textureId = loadTexture(width, height, pixel.data());
+    }
 
     if(textureId) {
         ImGui::Image(std::bit_cast<ImTextureID>(textureId->getTexture()), ImVec2{ 64, 64 }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
@@ -810,9 +1034,22 @@ std::unique_ptr<Node> EditorLastFrame::toSTTF() const {
 void EditorLastFrame::fromSTTF(Node&) {
     // should be fixed by post processing
 }
+std::unique_ptr<Node> EditorKeyboard::toSTTF() const {
+    return nullptr;
+}
+void EditorKeyboard::fromSTTF(Node& node) {}
 void PipelineEditor::loadSTTF(const std::string& path) {}
 void PipelineEditor::saveSTTF(const std::string& path) {}
 void PipelineEditor::loadFromShaderToy(const std::string& path) {
+    std::vector<std::unique_ptr<EditorNode>> oldNodes;
+    oldNodes.swap(mNodes);
+    std::vector<EditorLink> oldLinks;
+    oldLinks.swap(mLinks);
+    auto guard = scopeFail([&] {
+        oldNodes.swap(mNodes);
+        oldLinks.swap(mLinks);
+    });
+
     std::string_view shaderId = path;
     if(const auto pos = shaderId.find_last_of('/'); pos != std::string_view::npos)
         shaderId = shaderId.substr(pos + 1);
@@ -823,7 +1060,168 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     headers.emplace("referer", url);
     auto res = client.Post("/shadertoy", headers, std::string(R"(s={"shaders":[")") + shaderId.data() + "\"]}&nt=1&nl=1&np=1",
                            "application/x-www-form-urlencoded");
-    // TODO: parse json
+    // TODO: parse metadata
+    auto json = nlohmann::json::parse(res->body);
+    auto renderPasses = json[0].at("renderpass");
+    auto getOrder = [](const std::string& name) { return std::toupper(name.back()); };
+
+    std::unordered_map<std::string, EditorShader*> newShaderNodes;
+
+    auto& sinkNode = spawnRenderOutput();
+    auto addLink = [&](EditorNode* src, EditorNode* dst, uint32_t channel, nlohmann::json* ref) {
+        mLinks.emplace_back(nextId(), src->Outputs.front().ID, dst->Inputs[channel].ID);
+        if(ref) {
+            auto& link = mLinks.back();
+            auto sampler = ref->at("sampler");
+            const auto filter = sampler.at("filter").get<std::string>();
+            const auto wrap = sampler.at("wrap").get<std::string>();
+            if(filter == "linear") {
+                link.filter = Filter::Linear;
+            } else if(filter == "nearest") {
+                link.filter = Filter::Nearest;
+            } else if(filter == "mipmap") {
+                link.filter = Filter::Mipmap;
+            } else {
+                reportNotImplemented();
+            }
+
+            if(wrap == "clamp") {
+                link.wrapMode = Wrap::Clamp;
+            } else if(wrap == "repeat") {
+                link.wrapMode = Wrap::Repeat;
+            } else {
+                reportNotImplemented();
+            }
+        }
+    };
+    EditorNode* keyboard = nullptr;
+    auto getKeyboard = [&] {
+        if(!keyboard)
+            keyboard = &spawnKeyboard();
+        return keyboard;
+    };
+    std::unordered_map<std::string, EditorTexture*> textureCache;
+    auto getTexture = [&](nlohmann::json& tex) -> EditorTexture* {
+        const auto id = tex.at("id").get<std::string>();
+        if(auto iter = textureCache.find(id); iter != textureCache.cend())
+            return iter->second;
+        auto& texture = spawnTexture();
+        const auto path = tex.at("filepath").get<std::string>();
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Downloading texture %s", path.c_str());
+        auto img = client.Get(path, headers);
+
+        stbi_set_flip_vertically_on_load(tex.at("sampler").at("vflip").get<std::string>() == "true");
+        int width, height, channels;
+        const auto ptr = stbi_load_from_memory(std::bit_cast<const stbi_uc*>(img->body.data()),
+                                               static_cast<int>(img->body.size()), &width, &height, &channels, 4);
+        if(!ptr) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load image %s: %s", path.c_str(), stbi_failure_reason());
+            throw Error{};
+        }
+        auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
+        const auto begin = std::bit_cast<const uint32_t*>(ptr);
+        const auto end = begin + static_cast<ptrdiff_t>(width) * height;
+        texture.pixel = std::vector<uint32_t>{ begin, end };
+        texture.textureId = loadTexture(width, height, texture.pixel.data());
+
+        textureCache.emplace(id, &texture);
+        return &texture;
+    };
+    std::string common;
+    for(auto& pass : renderPasses) {
+        if(pass.at("name").get<std::string>().empty()) {
+            pass.at("name") = generateUniqueName(pass.at("type").get<std::string>());
+        }
+        if(pass.at("outputs").empty()) {
+            pass.at("outputs").push_back(nlohmann::json::object({ { "id", "tmp" + std::to_string(nextId()) } }));
+        }
+    }
+    for(auto& pass : renderPasses) {
+        const auto type = pass.at("type").get<std::string>();
+        const auto code = pass.at("code").get<std::string>();
+        const auto name = pass.at("name").get<std::string>();
+        if(type == "common") {
+            common = code + '\n';
+        } else if(type == "image" || type == "buffer") {
+            const auto output = pass.at("outputs")[0].at("id").get<std::string>();
+            auto& node = spawnShader();
+            node.editor.setText(code);
+            node.Name = name;
+            newShaderNodes.emplace(output, &node);
+
+            for(auto& input : pass.at("inputs")) {
+                auto inputType = input.at("type").get<std::string>();
+                if(inputType == "buffer") {
+                    continue;
+                }
+                auto channel = input.at("channel").get<uint32_t>();
+                if(inputType == "keyboard") {
+                    addLink(getKeyboard(), &node, channel, &input);
+                } else if(inputType == "texture") {
+                    addLink(getTexture(input), &node, channel, &input);
+                } else {
+                    Log(HelloImGui::LogLevel::Error, "Unsupported input type %s", inputType.c_str());
+                }
+            }
+
+            if(type == "image") {
+                addLink(&node, &sinkNode, 0, nullptr);
+            }
+        } else {
+            Log(HelloImGui::LogLevel::Error, "Unsupported pass type %s", type.c_str());
+            throw Error{};
+        }
+    }
+
+    if(!common.empty()) {
+        for(auto& [name, shader] : newShaderNodes) {
+            shader->editor.setText(common + shader->editor.getText());
+        }
+    }
+
+    std::unordered_map<EditorShader*, EditorLastFrame*> lastFrames;
+    auto getLastFrame = [&](EditorShader* src) {
+        if(auto iter = lastFrames.find(src); iter != lastFrames.cend()) {
+            return iter->second;
+        }
+        auto& lastFrame = spawnLastFrame();
+        lastFrame.lastFrame = src;
+        lastFrames.emplace(src, &lastFrame);
+        return &lastFrame;
+    };
+    for(auto& pass : renderPasses) {
+        const auto type = pass.at("type").get<std::string>();
+        if(type == "common") {
+            continue;
+        }
+        if(type == "image" || type == "buffer") {
+            const auto name = pass.at("name").get<std::string>();
+            const auto idxDst = getOrder(name);
+            const auto node = newShaderNodes.at(pass.at("outputs")[0].at("id").get<std::string>());
+
+            for(auto& input : pass.at("inputs")) {
+                auto inputType = input.at("type").get<std::string>();
+                if(inputType != "buffer") {
+                    continue;
+                }
+
+                auto channel = input.at("channel").get<uint32_t>();
+                auto src = newShaderNodes.at(input.at("id").get<std::string>());
+                const auto idxSrc = getOrder(src->Name);
+                if(idxSrc < idxDst) {
+                    addLink(src, node, channel, &input);
+                } else {
+                    addLink(getLastFrame(src), node, channel, &input);
+                }
+            }
+        } else {
+            Log(HelloImGui::LogLevel::Error, "Unsupported pass type %s", type.c_str());
+            throw Error{};
+        }
+    }
+
+    shouldResetLayout = true;
+    shouldBuildPipeline = true;
 }
 
 SHADERTOY_NAMESPACE_END

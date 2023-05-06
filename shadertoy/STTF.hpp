@@ -22,7 +22,7 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
-enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, LastFrame, Unknown };
+enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, LastFrame, Keyboard, Unknown };
 enum class NodeType { Image, CubeMap, Sound };
 enum class Filter { Mipmap, Linear, Nearest };
 enum class Wrap { Clamp, Repeat };

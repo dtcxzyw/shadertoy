@@ -79,10 +79,12 @@ static void showCanvas(ShaderToyContext& ctx) {
         }
     }
 
+    const auto mouse = ctx.getMouseStatus();
     // TODO: record
     ImGui::SameLine();
-    ImGui::Text("% 6.2f % 9.2f fps % 4d x% 4d", static_cast<double>(ctx.getTime()), static_cast<double>(ImGui::GetIO().Framerate),
-                static_cast<int>(size.x), static_cast<int>(size.y));
+    ImGui::Text("% 6.2f % 9.2f fps % 4d x% 4d [%d %d %d %d]", static_cast<double>(ctx.getTime()),
+                static_cast<double>(ImGui::GetIO().Framerate), static_cast<int>(size.x), static_cast<int>(size.y),
+                static_cast<int>(mouse.x), static_cast<int>(mouse.y), static_cast<int>(mouse.z), static_cast<int>(mouse.w));
     ImGui::End();
 }
 
@@ -125,9 +127,11 @@ static void showMenu() {
 void showImportModal() {
     if(startImport) {
         ImGui::OpenPopup("Import Shader");
-        const std::string_view clipboardText = ImGui::GetClipboardText();
-        if(clipboardText.starts_with("https://www.shadertoy.com/view/")) {
-            url = clipboardText;
+        if(auto text = ImGui::GetClipboardText()) {
+            const std::string_view clipboardText = text;
+            if(clipboardText.starts_with("https://www.shadertoy.com/view/")) {
+                url = clipboardText;
+            }
         }
         startImport = false;
     }
@@ -141,7 +145,11 @@ void showImportModal() {
         ImGui::InputText("##Url", &url, ImGuiInputTextFlags_CharsNoBlank);
 
         if(ImGui::Button("Import", ImVec2(120, 0))) {
-            PipelineEditor::get().loadFromShaderToy(url);
+            try {
+                PipelineEditor::get().loadFromShaderToy(url);
+            } catch(const Error&) {
+                Log(HelloImGui::LogLevel::Error, "Failed to import %s", url.c_str());
+            }
             ImGui::CloseCurrentPopup();
         }
         ImGui::SetItemDefaultFocus();
