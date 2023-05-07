@@ -17,7 +17,9 @@
 #include <cassert>
 #include <cmath>
 #include <ctime>
+#pragma warning(push, 0)
 #include <imgui.h>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -36,7 +38,7 @@ void ShaderToyContext::tick() {
     mFrameRate = ImGui::GetIO().Framerate;
 
     const auto current = SystemClock::to_time_t(now);
-    const auto tm = std::localtime(&current);
+    const auto tm = std::localtime(&current);  // NOLINT(concurrency-mt-unsafe)
     mDate = { static_cast<float>(tm->tm_year + 1900 - 1), static_cast<float>(tm->tm_mon), static_cast<float>(tm->tm_mday),
               static_cast<float>(tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec) +
                   static_cast<float>(now.time_since_epoch().count() % SystemClock::period::den) /
@@ -61,7 +63,7 @@ void ShaderToyContext::reset() {
     mTime = mTimeDelta = 0.0f;
     mFrameCount = 0;
 }
-void ShaderToyContext::render(ImVec2 base, ImVec2 size, const std::optional<ImVec4>& mouse) {
+void ShaderToyContext::render(const ImVec2 base, const ImVec2 size, const std::optional<ImVec4>& mouse) {
     auto* drawList = ImGui::GetWindowDrawList();
     mBase = base;
     mSize = size;

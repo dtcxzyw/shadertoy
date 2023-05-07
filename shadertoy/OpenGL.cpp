@@ -14,9 +14,11 @@
 
 #include "shadertoy/Backend.hpp"
 #include "shadertoy/Support.hpp"
-#include <GL/glew.h>
 #include <array>
+#pragma warning(push, 0)
+#include <GL/glew.h>
 #include <hello_imgui/hello_imgui.h>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -72,10 +74,13 @@ struct Vertex final {
 
 static void checkShaderCompileError(const GLuint shader, const std::string_view type) {
     GLint success;
-    std::array<GLchar, 1024> buffer = {};
+    std::vector<GLchar> buffer;
+    GLint size;
     if(type != "PROGRAM") {
         glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
         if(!success) {
+            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &size);
+            buffer.resize(static_cast<size_t>(size));
             glGetShaderInfoLog(shader, static_cast<GLsizei>(buffer.size()), nullptr, buffer.data());
             Log(HelloImGui::LogLevel::Error, "%s", buffer.data());
             throw Error{};
@@ -83,6 +88,8 @@ static void checkShaderCompileError(const GLuint shader, const std::string_view 
     } else {
         glGetProgramiv(shader, GL_LINK_STATUS, &success);
         if(!success) {
+            glGetProgramiv(shader, GL_INFO_LOG_LENGTH, &size);
+            buffer.resize(static_cast<size_t>(size));
             glGetProgramInfoLog(shader, static_cast<GLsizei>(buffer.size()), nullptr, buffer.data());
             Log(HelloImGui::LogLevel::Error, "%s", buffer.data());
             throw Error{};
@@ -105,6 +112,10 @@ public:
         glBindTexture(GL_TEXTURE_2D, GL_NONE);
         glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
     }
+    GLFrameBuffer(const GLFrameBuffer&) = delete;
+    GLFrameBuffer(GLFrameBuffer&&) = delete;
+    GLFrameBuffer& operator=(const GLFrameBuffer&) = delete;
+    GLFrameBuffer& operator=(GLFrameBuffer&&) = delete;
     ~GLFrameBuffer() override {
         glDeleteFramebuffers(1, &mFBO);
         glDeleteTextures(1, &mTexture);
@@ -140,12 +151,12 @@ class RenderPass final {
     GLint mLocationFrame;
     GLint mLocationMouse;
     GLint mLocationDate;
-    GLint mLocationChannel[4];
-    GLint mLocationChannelResolution[4];
+    GLint mLocationChannel[4]{};
+    GLint mLocationChannelResolution[4]{};
     std::vector<Channel> mChannels;
 
 public:
-    RenderPass(const std::string& src, DoubleBufferedFB buffer, std::vector<Channel> channels)
+    RenderPass(const std::string& src, const DoubleBufferedFB buffer, std::vector<Channel> channels)
         : mBuffer{ buffer }, mChannels{ std::move(channels) } {
         const auto realSrc = shaderPixelHeader + src + shaderPixelFooter;
         const auto realSrcData = realSrc.c_str();
@@ -194,7 +205,9 @@ public:
 #undef SHADERTOY_GET_UNIFORM_LOCATION
     }
     RenderPass(const RenderPass&) = delete;
+    RenderPass(RenderPass&&) = delete;
     RenderPass& operator=(const RenderPass&) = delete;
+    RenderPass& operator=(RenderPass&&) = delete;
     ~RenderPass() {
         glDeleteProgram(mProgram);
     }
@@ -303,7 +316,7 @@ public:
 };
 
 class GLTextureObject final : public TextureObject {
-    GLuint mTex;
+    GLuint mTex{};
     ImVec2 mSize;
 
 public:
@@ -318,6 +331,10 @@ public:
         }
         glBindTexture(GL_TEXTURE_2D, GL_NONE);
     }
+    GLTextureObject(const GLTextureObject&) = delete;
+    GLTextureObject(GLTextureObject&&) = delete;
+    GLTextureObject& operator=(const GLTextureObject&) = delete;
+    GLTextureObject& operator=(GLTextureObject&&) = delete;
     ~GLTextureObject() override {
         glDeleteTextures(1, &mTex);
     }
@@ -360,7 +377,10 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
     }
-
+    OpenGLPipeline(const OpenGLPipeline&) = delete;
+    OpenGLPipeline(OpenGLPipeline&&) = delete;
+    OpenGLPipeline& operator=(const OpenGLPipeline&) = delete;
+    OpenGLPipeline& operator=(OpenGLPipeline&&) = delete;
     ~OpenGLPipeline() override {
         glDeleteVertexArrays(1, &mVAO);
         glDeleteBuffers(1, &mVBO);

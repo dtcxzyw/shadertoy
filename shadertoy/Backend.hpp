@@ -15,9 +15,11 @@
 #pragma once
 #include "STTF.hpp"
 #include "shadertoy/Config.hpp"
-#include <hello_imgui/hello_imgui.h>
 #include <memory>
 #include <string>
+#pragma warning(push, 0)
+#include <hello_imgui/hello_imgui.h>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -37,10 +39,10 @@ struct DoubleBuffered final {
 using DoubleBufferedTex = DoubleBuffered<TextureId>;
 
 struct ShaderToyUniform final {
-    float time;
-    float timeDelta;
-    float frameRate;
-    int32_t frame;
+    float time{};
+    float timeDelta{};
+    float frameRate{};
+    int32_t frame{};
     ImVec4 mouse;
     ImVec4 date;
 };
@@ -48,6 +50,10 @@ struct ShaderToyUniform final {
 class TextureObject {
 public:
     TextureObject() = default;
+    TextureObject(const TextureObject&) = delete;
+    TextureObject(TextureObject&&) = delete;
+    TextureObject& operator=(const TextureObject&) = delete;
+    TextureObject& operator=(TextureObject&&) = delete;
     virtual ~TextureObject() = default;
     [[nodiscard]] virtual TextureId getTexture() const = 0;
     [[nodiscard]] virtual ImVec2 size() const = 0;
@@ -56,6 +62,10 @@ public:
 class FrameBuffer {
 public:
     FrameBuffer() = default;
+    FrameBuffer(const FrameBuffer&) = delete;
+    FrameBuffer(FrameBuffer&&) = delete;
+    FrameBuffer& operator=(const FrameBuffer&) = delete;
+    FrameBuffer& operator=(FrameBuffer&&) = delete;
     virtual ~FrameBuffer() = default;
     virtual void bind(uint32_t width, uint32_t height) = 0;
     virtual void unbind() = 0;
@@ -63,7 +73,7 @@ public:
 };
 using DoubleBufferedFB = DoubleBuffered<FrameBuffer*>;
 
-struct Channel final {
+struct Channel final {  // NOLINT(cppcoreguidelines-pro-type-member-init)
     uint32_t slot;
     DoubleBufferedTex tex;
     Filter filter;

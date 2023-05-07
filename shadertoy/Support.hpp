@@ -16,8 +16,9 @@
 
 #include "shadertoy/Config.hpp"
 #include <chrono>
+#pragma warning(push, 0)
 #include <gsl/gsl>
-#include <string_view>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -36,7 +37,7 @@ auto scopeFail(F&& f) {
 
 using Clock = std::chrono::steady_clock;
 
-struct Error final : public std::exception {};
+struct Error final : std::exception {};
 #ifdef NDEBUG
 #if defined(__cpp_lib_unreachable)
 #define SHADERTOY_UNREACHABLE() std::unreachable()

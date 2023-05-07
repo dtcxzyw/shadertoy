@@ -14,16 +14,17 @@
 
 #include "shadertoy/STTF.hpp"
 #include "shadertoy/Support.hpp"
-#include <cpp-base64/base64.h>
 #include <fstream>
+#pragma warning(push, 0)
+#include <cpp-base64/base64.h>
 #include <hello_imgui/hello_imgui.h>
 #include <magic_enum.hpp>
 #include <nlohmann/json.hpp>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
 void ShaderToyTransmissionFormat::load(const std::string& filePath) {
-    nlohmann::json json;
     std::ifstream file{ filePath };
     if(!file) {
         Log(HelloImGui::LogLevel::Error, "Cannot open file %s", filePath.c_str());
@@ -31,6 +32,7 @@ void ShaderToyTransmissionFormat::load(const std::string& filePath) {
     }
 
     try {
+        nlohmann::json json;
         file >> json;
 
         json.at("metadata").get_to(metadata);
@@ -148,13 +150,13 @@ void ShaderToyTransmissionFormat::save(const std::string& filePath) const {
         }
 
         auto& jsonLinks = json["links"];
-        for(auto& link : links) {
+        for(const auto& [start, end, filter, wrapMode, slot] : links) {
             nlohmann::json jsonLink;
-            jsonLink["start"] = link.start->name;
-            jsonLink["end"] = link.end->name;
-            jsonLink["filter"] = magic_enum::enum_name(link.filter);
-            jsonLink["wrapMode"] = magic_enum::enum_name(link.wrapMode);
-            jsonLink["slot"] = link.slot;
+            jsonLink["start"] = start->name;
+            jsonLink["end"] = end->name;
+            jsonLink["filter"] = magic_enum::enum_name(filter);
+            jsonLink["wrapMode"] = magic_enum::enum_name(wrapMode);
+            jsonLink["slot"] = slot;
             jsonLinks.push_back(jsonLink);
         }
 

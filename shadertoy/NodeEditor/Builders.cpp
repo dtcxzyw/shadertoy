@@ -11,58 +11,60 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/NodeEditor/Builders.hpp"
+#pragma warning(push, 0)
 #include <imgui-node-editor/imgui_node_editor.h>
 #include <imgui.h>
+#pragma warning(pop)
 
 //------------------------------------------------------------------------------
 namespace ed = ax::NodeEditor;
 namespace util = ax::NodeEditor::Utilities;
 
-util::BlueprintNodeBuilder::BlueprintNodeBuilder(ImTextureID texture, int textureWidth, int textureHeight)
-    : HeaderTextureId(texture), HeaderTextureWidth(textureWidth), HeaderTextureHeight(textureHeight), CurrentNodeId(0),
-      CurrentStage(Stage::Invalid), HasHeader(false) {}
+util::BlueprintNodeBuilder::BlueprintNodeBuilder(const ImTextureID texture, const int textureWidth, const int textureHeight)
+    : mHeaderTextureId(texture), mHeaderTextureWidth(textureWidth), mHeaderTextureHeight(textureHeight), mCurrentNodeId(0),
+      mCurrentStage(Stage::Invalid), mHasHeader(false) {}
 
-void util::BlueprintNodeBuilder::Begin(ed::NodeId id) {
-    HasHeader = false;
-    HeaderMin = HeaderMax = ImVec2();
+void util::BlueprintNodeBuilder::begin(const ed::NodeId id) {
+    mHasHeader = false;
+    mHeaderMin = mHeaderMax = ImVec2();
 
     ed::PushStyleVar(StyleVar_NodePadding, ImVec4(8, 4, 8, 8));
 
     ed::BeginNode(id);
 
     ImGui::PushID(id.AsPointer());
-    CurrentNodeId = id;
+    mCurrentNodeId = id;
 
-    SetStage(Stage::Begin);
+    setStage(Stage::Begin);
 }
 
-void util::BlueprintNodeBuilder::End() {
-    SetStage(Stage::End);
+void util::BlueprintNodeBuilder::end() {
+    setStage(Stage::End);
 
     ed::EndNode();
 
     if(ImGui::IsItemVisible()) {
-        auto alpha = static_cast<int>(255 * ImGui::GetStyle().Alpha);
+        const auto alpha = static_cast<int>(255 * ImGui::GetStyle().Alpha);
 
-        auto drawList = ed::GetNodeBackgroundDrawList(CurrentNodeId);
+        const auto drawList = ed::GetNodeBackgroundDrawList(mCurrentNodeId);
 
         const auto halfBorderWidth = ed::GetStyle().NodeBorderWidth * 0.5f;
 
-        auto headerColor = IM_COL32(0, 0, 0, alpha) | (HeaderColor & IM_COL32(255, 255, 255, 0));
-        if((HeaderMax.x > HeaderMin.x) && (HeaderMax.y > HeaderMin.y) && HeaderTextureId) {
-            const auto uv = ImVec2((HeaderMax.x - HeaderMin.x) / (float)(4.0f * HeaderTextureWidth),
-                                   (HeaderMax.y - HeaderMin.y) / (float)(4.0f * HeaderTextureHeight));
+        auto headerColor = IM_COL32(0, 0, 0, alpha) | (mHeaderColor & IM_COL32(255, 255, 255, 0));
+        if((mHeaderMax.x > mHeaderMin.x) && (mHeaderMax.y > mHeaderMin.y) && mHeaderTextureId) {
+            const auto uv = ImVec2((mHeaderMax.x - mHeaderMin.x) / (4.0f * static_cast<float>(mHeaderTextureWidth)),
+                                   (mHeaderMax.y - mHeaderMin.y) / (4.0f * static_cast<float>(mHeaderTextureHeight)));
 
-            drawList->AddImageRounded(HeaderTextureId, HeaderMin - ImVec2(8 - halfBorderWidth, 4 - halfBorderWidth),
-                                      HeaderMax + ImVec2(8 - halfBorderWidth, 0), ImVec2(0.0f, 0.0f), uv,
+            drawList->AddImageRounded(mHeaderTextureId, mHeaderMin - ImVec2(8 - halfBorderWidth, 4 - halfBorderWidth),
+                                      mHeaderMax + ImVec2(8 - halfBorderWidth, 0), ImVec2(0.0f, 0.0f), uv,
 #if IMGUI_VERSION_NUM > 18101
                                       headerColor, GetStyle().NodeRounding, ImDrawFlags_RoundCornersTop);
 #else
                                       headerColor, GetStyle().NodeRounding, 1 | 2);
 #endif
 
-            auto headerSeparatorMin = ImVec2(HeaderMin.x, HeaderMax.y);
-            auto headerSeparatorMax = ImVec2(HeaderMax.x, HeaderMin.y);
+            const auto headerSeparatorMin = ImVec2(mHeaderMin.x, mHeaderMax.y);
+            const auto headerSeparatorMax = ImVec2(mHeaderMax.x, mHeaderMin.y);
 
             if((headerSeparatorMax.x > headerSeparatorMin.x) && (headerSeparatorMax.y > headerSeparatorMin.y)) {
                 drawList->AddLine(headerSeparatorMin + ImVec2(-(8 - halfBorderWidth), -0.5f),
@@ -72,98 +74,91 @@ void util::BlueprintNodeBuilder::End() {
         }
     }
 
-    CurrentNodeId = 0;
+    mCurrentNodeId = 0;
 
     ImGui::PopID();
 
     ed::PopStyleVar();
 
-    SetStage(Stage::Invalid);
+    setStage(Stage::Invalid);
 }
 
-void util::BlueprintNodeBuilder::Header(const ImVec4& color) {
-    HeaderColor = ImColor(color);
-    SetStage(Stage::Header);
+void util::BlueprintNodeBuilder::header(const ImVec4& color) {
+    mHeaderColor = ImColor(color);
+    setStage(Stage::Header);
 }
 
-void util::BlueprintNodeBuilder::EndHeader() {
-    SetStage(Stage::Content);
+void util::BlueprintNodeBuilder::endHeader() {
+    setStage(Stage::Content);
 }
 
-void util::BlueprintNodeBuilder::Input(ed::PinId id) {
-    if(CurrentStage == Stage::Begin)
-        SetStage(Stage::Content);
+void util::BlueprintNodeBuilder::input(ed::PinId id) {
+    if(mCurrentStage == Stage::Begin)
+        setStage(Stage::Content);
 
-    const auto applyPadding = (CurrentStage == Stage::Input);
+    const auto applyPadding = (mCurrentStage == Stage::Input);
 
-    SetStage(Stage::Input);
+    setStage(Stage::Input);
 
     if(applyPadding)
         ImGui::Spring(0);
 
-    Pin(id, PinKind::Input);
+    pin(id, PinKind::Input);
 
     ImGui::BeginHorizontal(id.AsPointer());
 }
 
-void util::BlueprintNodeBuilder::EndInput() {
+void util::BlueprintNodeBuilder::endInput() {
     ImGui::EndHorizontal();
 
-    EndPin();
+    endPin();
 }
 
-void util::BlueprintNodeBuilder::Middle() {
-    if(CurrentStage == Stage::Begin)
-        SetStage(Stage::Content);
+void util::BlueprintNodeBuilder::middle() {
+    if(mCurrentStage == Stage::Begin)
+        setStage(Stage::Content);
 
-    SetStage(Stage::Middle);
+    setStage(Stage::Middle);
 }
 
-void util::BlueprintNodeBuilder::Output(ed::PinId id) {
-    if(CurrentStage == Stage::Begin)
-        SetStage(Stage::Content);
+void util::BlueprintNodeBuilder::output(ed::PinId id) {
+    if(mCurrentStage == Stage::Begin)
+        setStage(Stage::Content);
 
-    const auto applyPadding = (CurrentStage == Stage::Output);
+    const auto applyPadding = (mCurrentStage == Stage::Output);
 
-    SetStage(Stage::Output);
+    setStage(Stage::Output);
 
     if(applyPadding)
         ImGui::Spring(0);
 
-    Pin(id, PinKind::Output);
+    pin(id, PinKind::Output);
 
     ImGui::BeginHorizontal(id.AsPointer());
 }
 
-void util::BlueprintNodeBuilder::EndOutput() {
+void util::BlueprintNodeBuilder::endOutput() {
     ImGui::EndHorizontal();
 
-    EndPin();
+    endPin();
 }
 
-bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
-    if(stage == CurrentStage)
+bool util::BlueprintNodeBuilder::setStage(Stage stage) {
+    if(stage == mCurrentStage)
         return false;
 
-    auto oldStage = CurrentStage;
-    CurrentStage = stage;
+    const auto oldStage = mCurrentStage;
+    mCurrentStage = stage;
 
-    ImVec2 cursor;
     switch(oldStage) {
-        case Stage::Begin:
-            break;
-
         case Stage::Header:
             ImGui::EndHorizontal();
-            HeaderMin = ImGui::GetItemRectMin();
-            HeaderMax = ImGui::GetItemRectMax();
+            mHeaderMin = ImGui::GetItemRectMin();
+            mHeaderMax = ImGui::GetItemRectMax();
 
             // spacing between header and content
             ImGui::Spring(0, ImGui::GetStyle().ItemSpacing.y * 2.0f);
 
-            break;
-
-        case Stage::Content:
             break;
 
         case Stage::Input:
@@ -198,10 +193,12 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
             //     ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), IM_COL32(255, 0, 0, 255));
 
             break;
-
+        case Stage::Content:  // NOLINT(bugprone-branch-clone)
+            [[fallthrough]];
+        case Stage::Begin:
+            [[fallthrough]];
         case Stage::End:
-            break;
-
+            [[fallthrough]];
         case Stage::Invalid:
             break;
     }
@@ -212,7 +209,7 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
             break;
 
         case Stage::Header:
-            HasHeader = true;
+            mHasHeader = true;
 
             ImGui::BeginHorizontal("header");
             break;
@@ -231,7 +228,7 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
             ed::PushStyleVar(ed::StyleVar_PivotAlignment, ImVec2(0, 0.5f));
             ed::PushStyleVar(ed::StyleVar_PivotSize, ImVec2(0, 0));
 
-            if(!HasHeader)
+            if(!mHasHeader)
                 ImGui::Spring(1, 0);
             break;
 
@@ -250,7 +247,7 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
             ed::PushStyleVar(ed::StyleVar_PivotAlignment, ImVec2(1.0f, 0.5f));
             ed::PushStyleVar(ed::StyleVar_PivotSize, ImVec2(0, 0));
 
-            if(!HasHeader)
+            if(!mHasHeader)
                 ImGui::Spring(1, 0);
             break;
 
@@ -259,13 +256,13 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
                 ImGui::Spring(1, 0);
             if(oldStage != Stage::Begin)
                 ImGui::EndHorizontal();
-            ContentMin = ImGui::GetItemRectMin();
-            ContentMax = ImGui::GetItemRectMax();
+            mContentMin = ImGui::GetItemRectMin();
+            mContentMax = ImGui::GetItemRectMax();
 
             // ImGui::Spring(0);
             ImGui::EndVertical();
-            NodeMin = ImGui::GetItemRectMin();
-            NodeMax = ImGui::GetItemRectMax();
+            mNodeMin = ImGui::GetItemRectMin();
+            mNodeMax = ImGui::GetItemRectMax();
             break;
 
         case Stage::Invalid:
@@ -275,11 +272,13 @@ bool util::BlueprintNodeBuilder::SetStage(Stage stage) {
     return true;
 }
 
-void util::BlueprintNodeBuilder::Pin(ed::PinId id, ed::PinKind kind) {
+// ReSharper disable once CppMemberFunctionMayBeStatic
+void util::BlueprintNodeBuilder::pin(const ed::PinId id, const ed::PinKind kind) {
     ed::BeginPin(id, kind);
 }
 
-void util::BlueprintNodeBuilder::EndPin() {
+// ReSharper disable once CppMemberFunctionMayBeStatic
+void util::BlueprintNodeBuilder::endPin() {
     ed::EndPin();
 
     // #debug

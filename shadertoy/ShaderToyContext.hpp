@@ -37,6 +37,11 @@ class ShaderToyContext final {
 
 public:
     ShaderToyContext();
+    ShaderToyContext(const ShaderToyContext&) = delete;
+    ShaderToyContext(ShaderToyContext&&) = delete;
+    ShaderToyContext& operator=(const ShaderToyContext&) = delete;
+    ShaderToyContext& operator=(ShaderToyContext&&) = delete;
+    ~ShaderToyContext() = default;
     void tick();
     [[nodiscard]] bool isRunning() const noexcept {
         return mRunning;
@@ -54,7 +59,7 @@ public:
         return mMouse;
     }
     [[nodiscard]] bool isValid() const noexcept {
-        return mPipeline.get();
+        return static_cast<bool>(mPipeline);
     }
 };
 

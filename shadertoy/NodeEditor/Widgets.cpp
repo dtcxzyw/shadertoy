@@ -11,14 +11,16 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/NodeEditor/Widgets.hpp"
+#pragma warning(push, 0)
 #include <imgui.h>
+#pragma warning(pop)
 
-void ax::Widgets::Icon(const ImVec2& size, IconType type, bool filled, const ImVec4& color /* = ImVec4(1, 1, 1, 1)*/,
+void ax::Widgets::icon(const ImVec2& size, const IconType type, const bool filled, const ImVec4& color /* = ImVec4(1, 1, 1, 1)*/,
                        const ImVec4& innerColor /* = ImVec4(0, 0, 0, 0)*/) {
     if(ImGui::IsRectVisible(size)) {
-        auto cursorPos = ImGui::GetCursorScreenPos();
-        auto drawList = ImGui::GetWindowDrawList();
-        ax::Drawing::DrawIcon(drawList, cursorPos, cursorPos + size, type, filled, ImColor(color), ImColor(innerColor));
+        const auto cursorPos = ImGui::GetCursorScreenPos();
+        const auto drawList = ImGui::GetWindowDrawList();
+        ax::Drawing::drawIcon(drawList, cursorPos, cursorPos + size, type, filled, ImColor(color), ImColor(innerColor));
     }
 
     ImGui::Dummy(size);

@@ -31,6 +31,10 @@ struct Node {
     std::string name;
 
     Node() = default;
+    Node(const Node&) = delete;
+    Node(Node&&) = delete;
+    Node& operator=(const Node&) = delete;
+    Node& operator=(Node&&) = delete;
     virtual ~Node() = default;
     [[nodiscard]] virtual NodeClass getNodeClass() const noexcept = 0;
     [[nodiscard]] virtual NodeType getNodeType() const noexcept = 0;
@@ -61,7 +65,7 @@ struct GLSLShader final : Node {
     std::string source;
     NodeType nodeType;
 
-    GLSLShader(std::string src, NodeType type) : source{ std::move(src) }, nodeType{ type } {}
+    GLSLShader(std::string src, const NodeType type) : source{ std::move(src) }, nodeType{ type } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::GLSLShader;
     }
@@ -75,7 +79,7 @@ struct LastFrame final : Node {
     Node* refNode = nullptr;
     NodeType nodeType;
 
-    LastFrame(std::string refNodeName, NodeType nodeType) : refNodeName{ std::move(refNodeName) }, nodeType{ nodeType } {}
+    LastFrame(std::string refNodeName, const NodeType nodeType) : refNodeName{ std::move(refNodeName) }, nodeType{ nodeType } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::LastFrame;
     }
@@ -89,7 +93,7 @@ struct Texture final : Node {
     uint32_t height;
     std::vector<uint32_t> pixel;  // R8G8B8A8
 
-    Texture(uint32_t w, uint32_t h, std::vector<uint32_t> data) : width{ w }, height{ h }, pixel{ std::move(data) } {}
+    Texture(const uint32_t w, const uint32_t h, std::vector<uint32_t> data) : width{ w }, height{ h }, pixel{ std::move(data) } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::Texture;
     }

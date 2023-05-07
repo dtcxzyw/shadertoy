@@ -16,6 +16,7 @@
 #include "shadertoy/NodeEditor/PipelineEditor.hpp"
 #include "shadertoy/ShaderToyContext.hpp"
 #include <cstdlib>
+#pragma warning(push, 0)
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
 #include <httplib.h>
@@ -25,23 +26,22 @@
 #include <nlohmann/json.hpp>
 #include <openssl/crypto.h>
 
-#define GL_SILENCE_DEPRECATION
+#define GL_SILENCE_DEPRECATION  // NOLINT(clang-diagnostic-unused-macros)
 #include <GL/glew.h>
 
 #include <GLFW/glfw3.h>
 #ifdef SHADERTOY_WINDOWS
-#define NOMINMAX
+#define NOMINMAX  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 #endif
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
-
-namespace ed = ax::NodeEditor;
 
 [[noreturn]] void reportFatalError(std::string_view error) {
     // TODO: pop up a message box
     fmt::print(stderr, "{}\n", error);
-    std::exit(EXIT_FAILURE);
+    std::abort();
 }
 
 [[noreturn]] void reportNotImplemented() {
@@ -146,7 +146,7 @@ static void showMenu() {
 static void showImportModal() {
     if(openImportModal) {
         ImGui::OpenPopup("Import Shader");
-        if(auto text = ImGui::GetClipboardText()) {
+        if(const auto text = ImGui::GetClipboardText()) {
             const std::string_view clipboardText = text;
             if(clipboardText.starts_with("https://www.shadertoy.com/view/")) {
                 url = clipboardText;
@@ -210,6 +210,7 @@ static void showAboutModal() {
 #endif
             ImGui::TextUnformatted("ImGui Node Editor " IMGUI_NODE_EDITOR_VERSION);
             ImGui::Text("GLFW3 %s", glfwGetVersionString());
+            // ReSharper disable once CppEqualOperandsInBinaryExpression
             ImGui::Text("fmt %d.%d.%d", FMT_VERSION / 10000, (FMT_VERSION % 10000) / 100, FMT_VERSION % 100);
             ImGui::TextUnformatted("cpp-httplib " CPPHTTPLIB_VERSION);
             ImGui::Text("magic_enum %d.%d.%d", MAGIC_ENUM_VERSION_MAJOR, MAGIC_ENUM_VERSION_MINOR, MAGIC_ENUM_VERSION_PATCH);

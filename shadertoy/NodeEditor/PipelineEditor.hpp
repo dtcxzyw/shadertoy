@@ -19,7 +19,9 @@
 #include "shadertoy/NodeEditor/Widgets.hpp"
 #include "shadertoy/STTF.hpp"
 #include "shadertoy/ShaderToyContext.hpp"
+#pragma warning(push, 0)
 #include <ImGuiColorTextEdit/TextEditor.h>
+#pragma warning(pop)
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -33,7 +35,7 @@ public:
 
     [[nodiscard]] std::string getText() const;
     void setText(const std::string& str);
-    void render(const ImVec2 size);
+    void render(ImVec2 size);
 };
 
 namespace ed = ax::NodeEditor;
@@ -45,27 +47,27 @@ enum class PinKind { Output, Input };
 
 struct EditorNode;
 struct EditorPin final {
-    ed::PinId ID;
-    EditorNode* Node;
-    std::string Name;
-    NodeType Type;
-    PinKind Kind;
+    ed::PinId id;
+    EditorNode* node;
+    std::string name;
+    NodeType type;
+    PinKind kind;
 
-    EditorPin(ed::PinId id, const char* name, NodeType type)
-        : ID(id), Node(nullptr), Name(name), Type(type), Kind(PinKind::Input) {}
+    EditorPin(const ed::PinId id, const char* name, const NodeType type)
+        : id(id), node(nullptr), name(name), type(type), kind(PinKind::Input) {}
 };
 
 struct EditorNode {
-    ed::NodeId ID;
-    std::string Name;
-    std::vector<EditorPin> Inputs;
-    std::vector<EditorPin> Outputs;
-    ImColor Color;
-    NodeType Type;
+    ed::NodeId id;
+    std::string name;
+    std::vector<EditorPin> inputs;
+    std::vector<EditorPin> outputs;
+    ImColor color;
+    NodeType type;
     bool rename = false;
 
-    EditorNode(uint32_t id, std::string name, ImColor color = ImColor(255, 255, 255))
-        : ID(id), Name(std::move(name)), Color(color), Type(NodeType::Image) {}
+    EditorNode(const uint32_t id, std::string name, const ImColor color = ImColor(255, 255, 255))
+        : id(id), name(std::move(name)), color(color), type(NodeType::Image) {}
     EditorNode(const EditorNode&) = delete;
     EditorNode& operator=(const EditorNode&) = delete;
     virtual ~EditorNode() = default;
@@ -77,7 +79,7 @@ struct EditorNode {
 };
 
 struct EditorRenderOutput final : EditorNode {
-    EditorRenderOutput(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorRenderOutput(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
     [[nodiscard]] NodeClass getClass() const noexcept override {
@@ -90,7 +92,7 @@ struct EditorShader final : EditorNode {
     bool isOpen = false;
     bool requestFocus = false;
 
-    EditorShader(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorShader(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
@@ -103,7 +105,7 @@ struct EditorLastFrame final : EditorNode {
     EditorNode* lastFrame = nullptr;
     bool openPopup = false;
 
-    EditorLastFrame(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorLastFrame(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     void renderContent() override;
     void renderPopup();
     std::unique_ptr<Node> toSTTF() const override;
@@ -117,7 +119,7 @@ struct EditorTexture final : EditorNode {
     std::vector<uint32_t> pixel;
     std::unique_ptr<TextureObject> textureId;
 
-    EditorTexture(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorTexture(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
@@ -128,7 +130,7 @@ struct EditorTexture final : EditorNode {
 };
 
 struct EditorKeyboard final : EditorNode {
-    EditorKeyboard(uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorKeyboard(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
 
@@ -138,16 +140,16 @@ struct EditorKeyboard final : EditorNode {
 };
 
 struct EditorLink final {
-    ed::LinkId ID;
+    ed::LinkId id;
 
-    ed::PinId StartPinID;
-    ed::PinId EndPinID;
+    ed::PinId startPinId;
+    ed::PinId endPinId;
     Filter filter;
     Wrap wrapMode;
 
-    EditorLink(ed::LinkId id, ed::PinId startPinId, ed::PinId endPinId, Filter filter = Filter::Linear,
-               Wrap wrapMode = Wrap::Repeat)
-        : ID(id), StartPinID(startPinId), EndPinID(endPinId), filter{ filter }, wrapMode{ wrapMode } {}
+    EditorLink(const ed::LinkId id, const ed::PinId startPinId, const ed::PinId endPinId, const Filter filter = Filter::Linear,
+               const Wrap wrapMode = Wrap::Repeat)
+        : id(id), startPinId(startPinId), endPinId(endPinId), filter{ filter }, wrapMode{ wrapMode } {}
 };
 
 class PipelineEditor final {
@@ -160,15 +162,15 @@ class PipelineEditor final {
     std::vector<std::unique_ptr<EditorNode>> mNodes;
     std::vector<EditorLink> mLinks;
     std::vector<std::pair<std::string, std::string>> mMetadata;
-    ed::NodeId contextNodeId;
-    ed::LinkId contextLinkId;
-    std::vector<const char*> shaderNodeNames;
-    std::vector<EditorNode*> shaderNodes;
-    bool shouldZoomToContent = false;
-    bool shouldResetLayout = false;
-    bool shouldBuildPipeline = false;
-    bool openMetadataEditor = false;
-    bool metadataEditorRequestFocus = false;
+    ed::NodeId mContextNodeId;
+    ed::LinkId mContextLinkId;
+    std::vector<const char*> mShaderNodeNames;
+    std::vector<EditorNode*> mShaderNodes;
+    bool mShouldZoomToContent = false;
+    bool mShouldResetLayout = false;
+    bool mShouldBuildPipeline = false;
+    bool mOpenMetadataEditor = false;
+    bool mMetadataEditorRequestFocus = false;
 
     uint32_t nextId();
     bool isPinLinked(ed::PinId id) const;
@@ -176,7 +178,7 @@ class PipelineEditor final {
     EditorPin* findPin(ed::PinId id) const;
     bool isUniqueName(const std::string_view& name, const EditorNode* exclude) const;
     std::string generateUniqueName(const std::string_view& base) const;
-    bool canCreateLink(const EditorPin* startPin, const EditorPin* endPin);
+    bool canCreateLink(const EditorPin* startPin, const EditorPin* endPin) const;
 
     void setupInitialPipeline();
     void renderEditor();

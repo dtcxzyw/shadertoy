@@ -12,7 +12,9 @@
 #pragma once
 
 //------------------------------------------------------------------------------
+#pragma warning(push, 0)
 #include <imgui-node-editor/imgui_node_editor.h>
+#pragma warning(pop)
 
 //------------------------------------------------------------------------------
 namespace ax {
@@ -21,43 +23,43 @@ namespace ax {
 
             //------------------------------------------------------------------------------
             struct BlueprintNodeBuilder {
-                BlueprintNodeBuilder(ImTextureID texture = nullptr, int textureWidth = 0, int textureHeight = 0);
+                explicit BlueprintNodeBuilder(ImTextureID texture = nullptr, int textureWidth = 0, int textureHeight = 0);
 
-                void Begin(NodeId id);
-                void End();
+                void begin(NodeId id);
+                void end();
 
-                void Header(const ImVec4& color = ImVec4(1, 1, 1, 1));
-                void EndHeader();
+                void header(const ImVec4& color = ImVec4(1, 1, 1, 1));
+                void endHeader();
 
-                void Input(PinId id);
-                void EndInput();
+                void input(PinId id);
+                void endInput();
 
-                void Middle();
+                void middle();
 
-                void Output(PinId id);
-                void EndOutput();
+                void output(PinId id);
+                void endOutput();
 
             private:
                 enum class Stage { Invalid, Begin, Header, Content, Input, Output, Middle, End };
 
-                bool SetStage(Stage stage);
+                bool setStage(Stage stage);
 
-                void Pin(PinId id, ax::NodeEditor::PinKind kind);
-                void EndPin();
+                void pin(PinId id, ax::NodeEditor::PinKind kind);
+                void endPin();
 
-                ImTextureID HeaderTextureId;
-                int HeaderTextureWidth;
-                int HeaderTextureHeight;
-                NodeId CurrentNodeId;
-                Stage CurrentStage;
-                ImU32 HeaderColor;
-                ImVec2 NodeMin;
-                ImVec2 NodeMax;
-                ImVec2 HeaderMin;
-                ImVec2 HeaderMax;
-                ImVec2 ContentMin;
-                ImVec2 ContentMax;
-                bool HasHeader;
+                ImTextureID mHeaderTextureId;
+                int mHeaderTextureWidth;
+                int mHeaderTextureHeight;
+                NodeId mCurrentNodeId;
+                Stage mCurrentStage;
+                ImU32 mHeaderColor{};
+                ImVec2 mNodeMin;
+                ImVec2 mNodeMax;
+                ImVec2 mHeaderMin;
+                ImVec2 mHeaderMax;
+                ImVec2 mContentMin;
+                ImVec2 mContentMax;
+                bool mHasHeader;
             };
 
             //------------------------------------------------------------------------------

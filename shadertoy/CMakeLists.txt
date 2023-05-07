@@ -18,6 +18,11 @@ hello_imgui_add_app(shadertoy
 	${CPP_BASE64_INCLUDE_DIRS}/cpp-base64/base64.cpp 
 	${IMGUI_NODE_EDITOR_SRC}
 )
+if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+	set_source_files_properties(${SHADERTOY_SRC} PROPERTIES COMPILE_FLAGS "/Wall /WX /wd4514 /wd4820 /wd4623 /wd4625 /wd4626 /wd5026 /wd5027 /wd4061 /wd5045 /wd4365 /wd4868 /wd4710 /D_CRT_SECURE_NO_WARNINGS")
+elseif(CMAKE_COMPILER_IS_GNUCXX)
+	set_source_files_properties(${SHADERTOY_SRC} PROPERTIES COMPILE_FLAGS "-Wall -Wextra -Werror -Wconversion -Wshadow -Wno-psabi")
+endif()
 target_include_directories(shadertoy PRIVATE ${CMAKE_CURRENT_LIST_DIR}/thirdparty/hello_imgui/src ${IMGUI_SRC_DIR} ${CMAKE_CURRENT_LIST_DIR}/thirdparty/)
 target_link_libraries(shadertoy PRIVATE fmt::fmt GLEW::GLEW unofficial::nativefiledialog::nfd Microsoft.GSL::GSL magic_enum::magic_enum httplib::httplib OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(shadertoy PRIVATE ${Stb_INCLUDE_DIR} ${CPP_BASE64_INCLUDE_DIRS} ${IMGUI_NODE_EDITOR_INCLUDE_DIRS})
