@@ -18,11 +18,21 @@
 #include <cstdlib>
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
+#include <httplib.h>
+#include <magic_enum.hpp>
 #include <misc/cpp/imgui_stdlib.h>
 #include <nfd.h>
+#include <nlohmann/json.hpp>
+#include <openssl/crypto.h>
 
 #define GL_SILENCE_DEPRECATION
 #include <GL/glew.h>
+
+#include <GLFW/glfw3.h>
+#ifdef SHADERTOY_WINDOWS
+#define NOMINMAX
+#include <Windows.h>
+#endif
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -36,6 +46,14 @@ namespace ed = ax::NodeEditor;
 
 [[noreturn]] void reportNotImplemented() {
     reportFatalError("Not implemented feature");
+}
+
+static void openURL(const std::string& url) {
+#if defined(SHADERTOY_WINDOWS)
+    ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
+    std::system(("open " + url).c_str());
+#endif
 }
 
 static void showCanvas(ShaderToyContext& ctx) {
@@ -89,27 +107,28 @@ static void showCanvas(ShaderToyContext& ctx) {
 }
 
 static std::string url;
-static bool startImport = false;
+static bool openImportModal = false, openAboutModal = false;
 
 static void showMenu() {
     if(ImGui::BeginMenu("File")) {
-        if(ImGui::MenuItem("New Shader")) {
-            // TODO: reset
+        auto& editor = PipelineEditor::get();
+        if(ImGui::MenuItem("New shader")) {
+            editor.resetPipeline();
         }
-        if(ImGui::MenuItem("Open Shader")) {
+        if(ImGui::MenuItem("Open shader")) {
             nfdchar_t* path;
             if(NFD_OpenDialog("sttf", nullptr, &path) == NFD_OKAY) {
-                PipelineEditor::get().loadSTTF(path);
+                editor.loadSTTF(path);
             }
         }
-        if(ImGui::MenuItem("Save Shader")) {
+        if(ImGui::MenuItem("Save shader")) {
             nfdchar_t* path;
             if(NFD_SaveDialog("sttf", nullptr, &path) == NFD_OKAY) {
-                PipelineEditor::get().saveSTTF(path);
+                editor.saveSTTF(path);
             }
         }
-        if(ImGui::MenuItem("Import From shadertoy.com")) {
-            startImport = true;
+        if(ImGui::MenuItem("Import from shadertoy.com")) {
+            openImportModal = true;
         }
         ImGui::Separator();
         if(ImGui::MenuItem("Exit")) {
@@ -119,13 +138,13 @@ static void showMenu() {
     }
     if(ImGui::BeginMenu("Help")) {
         if(ImGui::MenuItem("About")) {
-            // TODO: about model
+            openAboutModal = true;
         }
         ImGui::EndMenu();
     }
 }
-void showImportModal() {
-    if(startImport) {
+static void showImportModal() {
+    if(openImportModal) {
         ImGui::OpenPopup("Import Shader");
         if(auto text = ImGui::GetClipboardText()) {
             const std::string_view clipboardText = text;
@@ -133,7 +152,7 @@ void showImportModal() {
                 url = clipboardText;
             }
         }
-        startImport = false;
+        openImportModal = false;
     }
     const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -160,8 +179,59 @@ void showImportModal() {
         ImGui::EndPopup();
     }
 }
+static void showAboutModal() {
+    if(openAboutModal) {
+        ImGui::OpenPopup("About Shadertoy live viewer");
+        openAboutModal = false;
+    }
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if(ImGui::BeginPopupModal("About Shadertoy live viewer", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Unofficial Shadertoy live viewer " SHADERTOY_VERSION);
+        ImGui::Separator();
+        ImGui::TextUnformatted("Copyright 2023 Yingwei Zheng");
+        ImGui::TextUnformatted("Licensed under the Apache License, Version 2.0");
+        ImGui::TextUnformatted("Build Time: " __DATE__ " " __TIME__);
+
+        if(ImGui::Button(ICON_FA_LINK " " SHADERTOY_URL)) {
+            openURL(SHADERTOY_URL);
+        }
+
+        if(ImGui::CollapsingHeader("Config", ImGuiTreeNodeFlags_DefaultOpen)) {
+            const auto& io = ImGui::GetIO();
+            ImGui::Text("Dear ImGui %s (%d)", IMGUI_VERSION, IMGUI_VERSION_NUM);
+            ImGui::Text("Platform: %s", io.BackendPlatformName ? io.BackendPlatformName : "Unknown");
+            ImGui::Text("Renderer: %s", io.BackendRendererName ? io.BackendRendererName : "Unknown");
+#if HELLOIMGUI_HAS_OPENGL
+            ImGui::Text("OpenGL version: %s", glGetString(GL_VERSION));
+            ImGui::Text("OpenGL vendor: %s", glGetString(GL_VENDOR));
+            ImGui::Text("Graphics device: %s", glGetString(GL_RENDERER));
+#endif
+            ImGui::TextUnformatted("ImGui Node Editor " IMGUI_NODE_EDITOR_VERSION);
+            ImGui::Text("GLFW3 %s", glfwGetVersionString());
+            ImGui::Text("fmt %d.%d.%d", FMT_VERSION / 10000, (FMT_VERSION % 10000) / 100, FMT_VERSION % 100);
+            ImGui::TextUnformatted("cpp-httplib " CPPHTTPLIB_VERSION);
+            ImGui::Text("magic_enum %d.%d.%d", MAGIC_ENUM_VERSION_MAJOR, MAGIC_ENUM_VERSION_MINOR, MAGIC_ENUM_VERSION_PATCH);
+            ImGui::Text("nlohmann-json %d.%d.%d", NLOHMANN_JSON_VERSION_MAJOR, NLOHMANN_JSON_VERSION_MINOR,
+                        NLOHMANN_JSON_VERSION_PATCH);
+            ImGui::TextUnformatted(OpenSSL_version(OPENSSL_VERSION));
+        }
+
+        if(ImGui::Button("Close", ImVec2(120, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SetItemDefaultFocus();
+        ImGui::EndPopup();
+    }
+}
 
 int shaderToyMain(int argc, char** argv) {
+    std::string initialPipeline;
+    if(argc == 2) {
+        initialPipeline = argv[1];
+    }
+
     ShaderToyContext ctx;
     HelloImGui::RunnerParams runnerParams;
     runnerParams.appWindowParams.windowTitle = "ShaderToy live viewer";
@@ -175,6 +245,10 @@ int shaderToyMain(int argc, char** argv) {
     runnerParams.imGuiWindowParams.showMenuBar = true;
     runnerParams.imGuiWindowParams.showMenu_App_Quit = false;
     runnerParams.callbacks.ShowMenus = [] { showMenu(); };
+    runnerParams.callbacks.ShowGui = [] {
+        showImportModal();
+        showAboutModal();
+    };
 
     runnerParams.callbacks.LoadAdditionalFonts = [] { HelloImGui::ImGuiDefaultSettings::LoadDefaultFont_WithFontAwesomeIcons(); };
 
@@ -198,9 +272,21 @@ int shaderToyMain(int argc, char** argv) {
     HelloImGui::DockableWindow canvasWindow;
     canvasWindow.label = "Canvas";
     canvasWindow.dockSpaceName = "LeftSpace";
-    canvasWindow.GuiFunction = [&ctx] {
+    canvasWindow.GuiFunction = [&] {
         if(!__glewCreateProgram && glewInit() != GLEW_OK)
-            reportFatalError("Fai led to initialize glew");
+            reportFatalError("Failed to initialize glew");
+
+        if(!initialPipeline.empty()) {
+            if(initialPipeline.starts_with("https://")) {
+                PipelineEditor::get().loadFromShaderToy(initialPipeline);
+            } else if(initialPipeline.ends_with(".sttf")) {
+                PipelineEditor::get().loadSTTF(initialPipeline);
+            } else {
+                HelloImGui::Log(HelloImGui::LogLevel::Error, "Unrecognized filepath %s", initialPipeline.c_str());
+            }
+
+            initialPipeline.clear();
+        }
 
         ctx.tick();
         showCanvas(ctx);
@@ -212,10 +298,7 @@ int shaderToyMain(int argc, char** argv) {
     HelloImGui::DockableWindow editorWindow;
     editorWindow.label = "Editor";
     editorWindow.dockSpaceName = "MainDockSpace";
-    editorWindow.GuiFunction = [&] {
-        PipelineEditor::get().render(ctx);
-        showImportModal();
-    };
+    editorWindow.GuiFunction = [&] { PipelineEditor::get().render(ctx); };
     runnerParams.dockingParams.dockableWindows = { canvasWindow, outputWindow, editorWindow };
 
     HelloImGui::Run(runnerParams);
@@ -224,6 +307,6 @@ int shaderToyMain(int argc, char** argv) {
 
 SHADERTOY_NAMESPACE_END
 
-int main(int argc, char** argv) {
+int main(const int argc, char** argv) {
     return ShaderToy::shaderToyMain(argc, argv);
 }

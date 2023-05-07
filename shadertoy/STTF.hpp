@@ -29,7 +29,6 @@ enum class Wrap { Clamp, Repeat };
 
 struct Node {
     std::string name;
-    std::vector<Node*> dependencies;
 
     Node() = default;
     virtual ~Node() = default;
@@ -73,6 +72,7 @@ struct GLSLShader final : Node {
 
 struct LastFrame final : Node {
     std::string refNodeName;
+    Node* refNode = nullptr;
     NodeType nodeType;
 
     LastFrame(std::string refNodeName, NodeType nodeType) : refNodeName{ std::move(refNodeName) }, nodeType{ nodeType } {}
@@ -98,10 +98,28 @@ struct Texture final : Node {
     }
 };
 
+struct Keyboard final : Node {
+    [[nodiscard]] NodeClass getNodeClass() const noexcept override {
+        return NodeClass::Keyboard;
+    }
+    [[nodiscard]] NodeType getNodeType() const noexcept override {
+        return NodeType::Image;
+    }
+};
+
+struct Link final {
+    Node* start;
+    Node* end;
+    Filter filter;
+    Wrap wrapMode;
+    uint32_t slot;
+};
+
 struct ShaderToyTransmissionFormat final {
     using Metadata = std::unordered_map<std::string, std::string>;
     Metadata metadata;
     std::vector<std::unique_ptr<Node>> nodes;
+    std::vector<Link> links;
 
     void load(const std::string& filePath);
     void save(const std::string& filePath) const;

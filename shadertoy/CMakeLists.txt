@@ -23,4 +23,15 @@ target_link_libraries(shadertoy PRIVATE fmt::fmt GLEW::GLEW unofficial::nativefi
 target_include_directories(shadertoy PRIVATE ${Stb_INCLUDE_DIR} ${CPP_BASE64_INCLUDE_DIRS} ${IMGUI_NODE_EDITOR_INCLUDE_DIRS})
 add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy 
 	${CMAKE_CURRENT_LIST_DIR}/thirdparty/imgui-node-editor/examples/blueprints-example/data/BlueprintBackground.png 
-	${CMAKE_BINARY_DIR}/assets/BlueprintBackground.png)
+	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/BlueprintBackground.png)
+add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy 
+	${CMAKE_SOURCE_DIR}/LICENSE
+	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/LICENSE)
+add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/licenses 
+	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/licenses)
+add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/examples 
+	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples)
+
+install(DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ DESTINATION ${CMAKE_INSTALL_PREFIX})

@@ -89,6 +89,14 @@ PipelineEditor::PipelineEditor() {
     shouldBuildPipeline = true;
     shouldResetLayout = true;
 }
+void PipelineEditor::resetPipeline() {
+    mNodes.clear();
+    mLinks.clear();
+    mMetadata.clear();
+    setupInitialPipeline();
+    shouldBuildPipeline = true;
+    shouldResetLayout = true;
+}
 
 PipelineEditor::~PipelineEditor() {
     ed::DestroyEditor(mCtx);
@@ -361,7 +369,7 @@ void PipelineEditor::renderEditor() {
 
             builder.Input(input.ID);
             ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
-            bool linked = isPinLinked(input.ID);
+            const bool linked = isPinLinked(input.ID);
             drawPinIcon(input, linked, static_cast<int>(alpha * 255));
             ImGui::Spring(0);
             if(!input.Name.empty()) {
@@ -562,7 +570,14 @@ void PipelineEditor::renderEditor() {
             node = &spawnTexture();
         if(ImGui::MenuItem("LastFrame"))
             node = &spawnLastFrame();
-        if(ImGui::MenuItem("Keyboard"))
+        auto hasKeyboard = [&] {
+            for(auto& it : mNodes) {
+                if(it->getClass() == NodeClass::Keyboard)
+                    return true;
+            }
+            return false;
+        };
+        if(!hasKeyboard() && ImGui::MenuItem("Keyboard"))
             node = &spawnKeyboard();
 
         ImGui::Separator();
@@ -883,7 +898,7 @@ void PipelineEditor::render(ShaderToyContext& context) {
                 shouldBuildPipeline = false;
             }
             ImGui::SameLine();
-            if(ImGui::Button("Zoom to Context")) {
+            if(ImGui::Button("Zoom to context")) {
                 shouldZoomToContent = true;
             }
             if(shouldZoomToContent) {
@@ -898,12 +913,48 @@ void PipelineEditor::render(ShaderToyContext& context) {
                 resetLayout();
                 shouldResetLayout = false;
             }
+            ImGui::SameLine();
+            if(ImGui::Button(ICON_FA_EDIT " Edit metadata")) {
+                openMetadataEditor = true;
+                metadataEditorRequestFocus = true;
+            }
 
             renderEditor();
             ed::SetCurrentEditor(nullptr);
             ImGui::EndTabItem();
         }
+        if(openMetadataEditor &&
+           ImGui::BeginTabItem("Metadata", &openMetadataEditor,
+                               metadataEditorRequestFocus ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None)) {
+            if(ImGui::Button(ICON_FA_PLUS " Add item")) {
+                mMetadata.emplace_back("Key", "Value");
+            }
+            if(ImGui::BeginChild("##StringMap")) {
+                uint32_t removeIdx = std::numeric_limits<uint32_t>::max();
+                uint32_t idx = 0;
+                const auto width = ImGui::GetContentRegionAvail().x / 7.0f * 3.0f;
+                for(auto& [k, v] : mMetadata) {
+                    ImGui::SetNextItemWidth(width);
+                    ImGui::InputText(fmt::format("##Key{}", idx).c_str(), &k);
+                    ImGui::SameLine();
+                    ImGui::SetNextItemWidth(width);
+                    ImGui::InputText(fmt::format("##Value{}", idx).c_str(), &v);
+                    ImGui::SameLine();
+                    if(ImGui::Button(ICON_FA_TIMES)) {
+                        removeIdx = idx;
+                    }
+                    ++idx;
+                }
 
+                if(removeIdx != std::numeric_limits<uint32_t>::max()) {
+                    mMetadata.erase(mMetadata.cbegin() + removeIdx);
+                }
+            }
+            ImGui::EndChild();
+
+            metadataEditorRequestFocus = false;
+            ImGui::EndTabItem();
+        }
         // source editor
         for(auto& node : mNodes) {
             if(const auto shader = dynamic_cast<EditorShader*>(node.get())) {
@@ -944,6 +995,7 @@ std::unique_ptr<Node> EditorShader::toSTTF() const {
 }
 void EditorShader::fromSTTF(Node& node) {
     const auto& shader = dynamic_cast<GLSLShader&>(node);
+    Type = shader.nodeType;
     editor.setText(shader.source);
 }
 
@@ -1035,19 +1087,117 @@ void EditorLastFrame::fromSTTF(Node&) {
     // should be fixed by post processing
 }
 std::unique_ptr<Node> EditorKeyboard::toSTTF() const {
-    return nullptr;
+    return std::make_unique<Keyboard>();
 }
-void EditorKeyboard::fromSTTF(Node& node) {}
-void PipelineEditor::loadSTTF(const std::string& path) {}
-void PipelineEditor::saveSTTF(const std::string& path) {}
+void EditorKeyboard::fromSTTF(Node&) {}
+void PipelineEditor::loadSTTF(const std::string& path) {
+    try {
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Loading sttf from %s", path.c_str());
+        ShaderToyTransmissionFormat sttf;
+        sttf.load(path);
+
+        std::vector<std::unique_ptr<EditorNode>> oldNodes;
+        oldNodes.swap(mNodes);
+        std::vector<EditorLink> oldLinks;
+        oldLinks.swap(mLinks);
+        std::vector<std::pair<std::string, std::string>> oldMetadata;
+        oldMetadata.swap(mMetadata);
+        auto guard = scopeFail([&] {
+            oldNodes.swap(mNodes);
+            oldLinks.swap(mLinks);
+            oldMetadata.swap(mMetadata);
+        });
+
+        for(auto [k, v] : sttf.metadata) {
+            mMetadata.emplace_back(k, v);
+        }
+
+        std::unordered_map<Node*, EditorNode*> nodeMap;
+        for(auto& node : sttf.nodes) {
+            EditorNode* newNode = nullptr;
+            switch(node->getNodeClass()) {
+                case NodeClass::RenderOutput: {
+                    newNode = &spawnRenderOutput();
+                } break;
+                case NodeClass::GLSLShader: {
+                    newNode = &spawnShader();
+                } break;
+                case NodeClass::Texture: {
+                    newNode = &spawnTexture();
+                } break;
+                case NodeClass::LastFrame: {
+                    newNode = &spawnLastFrame();
+                } break;
+                case NodeClass::Keyboard: {
+                    newNode = &spawnKeyboard();
+                } break;
+                default: {
+                    reportNotImplemented();
+                }
+            }
+
+            newNode->fromSTTF(*node);
+            nodeMap.emplace(node.get(), newNode);
+        }
+
+        // fix references of LastFrame
+        for(auto& node : sttf.nodes) {
+            if(node->getNodeClass() == NodeClass::LastFrame) {
+                auto editorNode = nodeMap.at(node.get());
+                dynamic_cast<EditorLastFrame*>(editorNode)->lastFrame = nodeMap.at(dynamic_cast<LastFrame*>(node.get())->refNode);
+            }
+        }
+
+        for(auto& link : sttf.links) {
+            auto start = nodeMap.at(link.start);
+            auto end = nodeMap.at(link.end);
+            mLinks.emplace_back(nextId(), start->Outputs.front().ID, end->Inputs[link.slot].ID, link.filter, link.wrapMode);
+        }
+
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Success!");
+
+        shouldResetLayout = true;
+        shouldBuildPipeline = true;
+    } catch(const Error&) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to load sttf %s", path.c_str());
+    }
+}
+void PipelineEditor::saveSTTF(const std::string& path) {
+    try {
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Writing shader to sttf file %s", path.c_str());
+        ShaderToyTransmissionFormat sttf;
+        for(auto& [key, val] : mMetadata)
+            sttf.metadata.emplace(key, val);
+        std::unordered_map<EditorNode*, Node*> nodeMap;
+        for(auto& node : mNodes) {
+            sttf.nodes.push_back(node->toSTTF());
+            auto& sttfNode = sttf.nodes.back();
+            sttfNode->name = node->Name;
+            nodeMap.emplace(node.get(), sttfNode.get());
+        }
+        for(auto& link : mLinks) {
+            auto startPin = findPin(link.StartPinID);
+            auto endPin = findPin(link.EndPinID);
+            auto slot = static_cast<uint32_t>(endPin - endPin->Node->Inputs.data());
+            sttf.links.emplace_back(nodeMap.at(startPin->Node), nodeMap.at(endPin->Node), link.filter, link.wrapMode, slot);
+        }
+        sttf.save(path);
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Success!");
+    } catch(const Error&) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to save sttf %s", path.c_str());
+    }
+}
 void PipelineEditor::loadFromShaderToy(const std::string& path) {
     std::vector<std::unique_ptr<EditorNode>> oldNodes;
     oldNodes.swap(mNodes);
     std::vector<EditorLink> oldLinks;
     oldLinks.swap(mLinks);
+    std::vector<std::pair<std::string, std::string>> oldMetadata;
+    oldMetadata.swap(mMetadata);
     auto guard = scopeFail([&] {
         oldNodes.swap(mNodes);
         oldLinks.swap(mLinks);
+        oldMetadata.swap(mMetadata);
     });
 
     std::string_view shaderId = path;
@@ -1060,8 +1210,15 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     headers.emplace("referer", url);
     auto res = client.Post("/shadertoy", headers, std::string(R"(s={"shaders":[")") + shaderId.data() + "\"]}&nt=1&nl=1&np=1",
                            "application/x-www-form-urlencoded");
-    // TODO: parse metadata
+
     auto json = nlohmann::json::parse(res->body);
+    auto metadata = json[0].at("info");
+
+    mMetadata.emplace_back("Name", metadata.at("name").get<std::string>());
+    mMetadata.emplace_back("Author", metadata.at("username").get<std::string>());
+    mMetadata.emplace_back("Description", metadata.at("description").get<std::string>());
+    mMetadata.emplace_back("ShaderToyURL", url);
+
     auto renderPasses = json[0].at("renderpass");
     auto getOrder = [](const std::string& name) { return std::toupper(name.back()); };
 
@@ -1069,30 +1226,31 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
 
     auto& sinkNode = spawnRenderOutput();
     auto addLink = [&](EditorNode* src, EditorNode* dst, uint32_t channel, nlohmann::json* ref) {
-        mLinks.emplace_back(nextId(), src->Outputs.front().ID, dst->Inputs[channel].ID);
+        Filter filter = Filter::Linear;
+        Wrap wrapMode = Wrap::Repeat;
         if(ref) {
-            auto& link = mLinks.back();
             auto sampler = ref->at("sampler");
-            const auto filter = sampler.at("filter").get<std::string>();
-            const auto wrap = sampler.at("wrap").get<std::string>();
-            if(filter == "linear") {
-                link.filter = Filter::Linear;
-            } else if(filter == "nearest") {
-                link.filter = Filter::Nearest;
-            } else if(filter == "mipmap") {
-                link.filter = Filter::Mipmap;
+            const auto filterName = sampler.at("filter").get<std::string>();
+            const auto wrapName = sampler.at("wrap").get<std::string>();
+            if(filterName == "linear") {
+                filter = Filter::Linear;
+            } else if(filterName == "nearest") {
+                filter = Filter::Nearest;
+            } else if(filterName == "mipmap") {
+                filter = Filter::Mipmap;
             } else {
                 reportNotImplemented();
             }
 
-            if(wrap == "clamp") {
-                link.wrapMode = Wrap::Clamp;
-            } else if(wrap == "repeat") {
-                link.wrapMode = Wrap::Repeat;
+            if(wrapName == "clamp") {
+                wrapMode = Wrap::Clamp;
+            } else if(wrapName == "repeat") {
+                wrapMode = Wrap::Repeat;
             } else {
                 reportNotImplemented();
             }
         }
+        mLinks.emplace_back(nextId(), src->Outputs.front().ID, dst->Inputs[channel].ID, filter, wrapMode);
     };
     EditorNode* keyboard = nullptr;
     auto getKeyboard = [&] {
@@ -1169,7 +1327,6 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
             }
         } else {
             Log(HelloImGui::LogLevel::Error, "Unsupported pass type %s", type.c_str());
-            throw Error{};
         }
     }
 
@@ -1216,7 +1373,6 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
             }
         } else {
             Log(HelloImGui::LogLevel::Error, "Unsupported pass type %s", type.c_str());
-            throw Error{};
         }
     }
 

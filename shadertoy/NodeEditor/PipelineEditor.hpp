@@ -142,10 +142,12 @@ struct EditorLink final {
 
     ed::PinId StartPinID;
     ed::PinId EndPinID;
-    Filter filter = Filter::Linear;
-    Wrap wrapMode = Wrap::Repeat;
+    Filter filter;
+    Wrap wrapMode;
 
-    EditorLink(ed::LinkId id, ed::PinId startPinId, ed::PinId endPinId) : ID(id), StartPinID(startPinId), EndPinID(endPinId) {}
+    EditorLink(ed::LinkId id, ed::PinId startPinId, ed::PinId endPinId, Filter filter = Filter::Linear,
+               Wrap wrapMode = Wrap::Repeat)
+        : ID(id), StartPinID(startPinId), EndPinID(endPinId), filter{ filter }, wrapMode{ wrapMode } {}
 };
 
 class PipelineEditor final {
@@ -154,10 +156,10 @@ class PipelineEditor final {
     std::uint32_t mNextId = 1;
     EditorPin* mNewNodeLinkPin = nullptr;
     EditorPin* mNewLinkPin = nullptr;
-    bool mIsDirty = false;
     ImTextureID mHeaderBackground = nullptr;
     std::vector<std::unique_ptr<EditorNode>> mNodes;
     std::vector<EditorLink> mLinks;
+    std::vector<std::pair<std::string, std::string>> mMetadata;
     ed::NodeId contextNodeId;
     ed::LinkId contextLinkId;
     std::vector<const char*> shaderNodeNames;
@@ -165,6 +167,8 @@ class PipelineEditor final {
     bool shouldZoomToContent = false;
     bool shouldResetLayout = false;
     bool shouldBuildPipeline = false;
+    bool openMetadataEditor = false;
+    bool metadataEditorRequestFocus = false;
 
     uint32_t nextId();
     bool isPinLinked(ed::PinId id) const;
@@ -191,13 +195,10 @@ public:
     ~PipelineEditor();
     void build(ShaderToyContext& context);
     void render(ShaderToyContext& context);
+    void resetPipeline();
     void loadSTTF(const std::string& path);
     void saveSTTF(const std::string& path);
     void loadFromShaderToy(const std::string& path);
-
-    [[nodiscard]] bool isDirty() const noexcept {
-        return mIsDirty;
-    }
 
     static PipelineEditor& get();
 };
