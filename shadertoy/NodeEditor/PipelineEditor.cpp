@@ -12,6 +12,10 @@
     limitations under the License.
 */
 
+#ifndef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#endif
+
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/NodeEditor/PipelineEditor.hpp"
 #include <queue>
