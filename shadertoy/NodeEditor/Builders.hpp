@@ -12,9 +12,11 @@
 #pragma once
 
 //------------------------------------------------------------------------------
-#pragma warning(push, 0)
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <imgui-node-editor/imgui_node_editor.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 //------------------------------------------------------------------------------
 namespace ax {

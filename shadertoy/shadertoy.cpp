@@ -16,7 +16,9 @@
 #include "shadertoy/NodeEditor/PipelineEditor.hpp"
 #include "shadertoy/ShaderToyContext.hpp"
 #include <cstdlib>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
 #include <httplib.h>
@@ -34,7 +36,8 @@
 #define NOMINMAX  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 #endif
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -52,7 +55,8 @@ static void openURL(const std::string& url) {
 #if defined(SHADERTOY_WINDOWS)
     ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 #else
-    std::system(("open " + url).c_str());
+    const auto ret = std::system(("open " + url).c_str());
+    SHADERTOY_UNUSED(ret);
 #endif
 }
 

@@ -79,7 +79,7 @@ struct LastFrame final : Node {
     Node* refNode = nullptr;
     NodeType nodeType;
 
-    LastFrame(std::string refNodeName, const NodeType nodeType) : refNodeName{ std::move(refNodeName) }, nodeType{ nodeType } {}
+    LastFrame(std::string refNodeNameVal, const NodeType nodeTypeVal) : refNodeName{ std::move(refNodeNameVal) }, nodeType{ nodeTypeVal } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::LastFrame;
     }

@@ -13,10 +13,11 @@
 */
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-#define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "shadertoy/NodeEditor/PipelineEditor.hpp"
 #include <queue>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
 #include <hello_imgui/image_from_asset.h>
@@ -26,7 +27,8 @@
 #include <nfd.h>
 #include <nlohmann/json.hpp>
 #include <stb_image.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -237,7 +239,7 @@ static ImColor getIconColor(const NodeType type) {
 }
 
 static void drawPinIcon(const EditorPin& pin, const bool connected, const int alpha) {
-    IconType iconType = iconType = IconType::Square;
+    IconType iconType = IconType::Square;
     ImColor color = getIconColor(pin.type);
     color.Value.w = static_cast<float>(alpha) / 255.0f;
     switch(pin.type) {
@@ -311,7 +313,7 @@ EditorPin* PipelineEditor::findPin(const ed::PinId id) const {
 
 void PipelineEditor::renderEditor() {
     ed::Begin("##PipelineEditor", ImVec2(0.0, 0.0));
-    util::BlueprintNodeBuilder builder(mHeaderBackground, 64, 64);
+    ax::NodeEditor::Utilities::BlueprintNodeBuilder builder(mHeaderBackground, 64, 64);
 
     const auto cursorTopLeft = ImGui::GetCursorScreenPos();
 

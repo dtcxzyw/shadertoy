@@ -15,12 +15,15 @@
 #include "shadertoy/STTF.hpp"
 #include "shadertoy/Support.hpp"
 #include <fstream>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <cpp-base64/base64.h>
 #include <hello_imgui/hello_imgui.h>
 #include <magic_enum.hpp>
 #include <nlohmann/json.hpp>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 

@@ -15,10 +15,13 @@
 #include "shadertoy/Backend.hpp"
 #include "shadertoy/Support.hpp"
 #include <array>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <GL/glew.h>
 #include <hello_imgui/hello_imgui.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 

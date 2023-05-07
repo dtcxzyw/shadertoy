@@ -11,9 +11,12 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/NodeEditor/Drawing.hpp"
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <imgui_internal.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 void ax::Drawing::drawIcon(ImDrawList* drawList, const ImVec2& a, const ImVec2& b, IconType type, bool filled, ImU32 color,
                            ImU32 innerColor) {

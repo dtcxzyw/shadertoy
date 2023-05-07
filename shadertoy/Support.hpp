@@ -16,9 +16,12 @@
 
 #include "shadertoy/Config.hpp"
 #include <chrono>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <gsl/gsl>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 

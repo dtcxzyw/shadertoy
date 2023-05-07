@@ -11,9 +11,12 @@
 
 #pragma once
 #include "shadertoy/NodeEditor/Drawing.hpp"
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <imgui.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 namespace ax {
     namespace Widgets {

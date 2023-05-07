@@ -19,9 +19,12 @@
 #include "shadertoy/NodeEditor/Widgets.hpp"
 #include "shadertoy/STTF.hpp"
 #include "shadertoy/ShaderToyContext.hpp"
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <ImGuiColorTextEdit/TextEditor.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -39,7 +42,6 @@ public:
 };
 
 namespace ed = ax::NodeEditor;
-namespace util = ax::NodeEditor::Utilities;
 using namespace ax;
 using ax::Widgets::IconType;
 
@@ -53,8 +55,8 @@ struct EditorPin final {
     NodeType type;
     PinKind kind;
 
-    EditorPin(const ed::PinId id, const char* name, const NodeType type)
-        : id(id), node(nullptr), name(name), type(type), kind(PinKind::Input) {}
+    EditorPin(const ed::PinId idVal, const char* nameVal, const NodeType typeVal)
+        : id(idVal), node(nullptr), name(nameVal), type(typeVal), kind(PinKind::Input) {}
 };
 
 struct EditorNode {
@@ -66,8 +68,8 @@ struct EditorNode {
     NodeType type;
     bool rename = false;
 
-    EditorNode(const uint32_t id, std::string name, const ImColor color = ImColor(255, 255, 255))
-        : id(id), name(std::move(name)), color(color), type(NodeType::Image) {}
+    EditorNode(const uint32_t idVal, std::string nameVal, const ImColor colorVal = ImColor(255, 255, 255))
+        : id(idVal), name(std::move(nameVal)), color(colorVal), type(NodeType::Image) {}
     EditorNode(const EditorNode&) = delete;
     EditorNode& operator=(const EditorNode&) = delete;
     virtual ~EditorNode() = default;
@@ -79,7 +81,7 @@ struct EditorNode {
 };
 
 struct EditorRenderOutput final : EditorNode {
-    EditorRenderOutput(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorRenderOutput(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
     [[nodiscard]] NodeClass getClass() const noexcept override {
@@ -92,7 +94,7 @@ struct EditorShader final : EditorNode {
     bool isOpen = false;
     bool requestFocus = false;
 
-    EditorShader(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorShader(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
@@ -105,7 +107,7 @@ struct EditorLastFrame final : EditorNode {
     EditorNode* lastFrame = nullptr;
     bool openPopup = false;
 
-    EditorLastFrame(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorLastFrame(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     void renderContent() override;
     void renderPopup();
     std::unique_ptr<Node> toSTTF() const override;
@@ -119,7 +121,7 @@ struct EditorTexture final : EditorNode {
     std::vector<uint32_t> pixel;
     std::unique_ptr<TextureObject> textureId;
 
-    EditorTexture(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorTexture(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     void renderContent() override;
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
@@ -130,7 +132,7 @@ struct EditorTexture final : EditorNode {
 };
 
 struct EditorKeyboard final : EditorNode {
-    EditorKeyboard(const uint32_t id, std::string name) : EditorNode(id, std::move(name)) {}
+    EditorKeyboard(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
 
@@ -147,9 +149,9 @@ struct EditorLink final {
     Filter filter;
     Wrap wrapMode;
 
-    EditorLink(const ed::LinkId id, const ed::PinId startPinId, const ed::PinId endPinId, const Filter filter = Filter::Linear,
-               const Wrap wrapMode = Wrap::Repeat)
-        : id(id), startPinId(startPinId), endPinId(endPinId), filter{ filter }, wrapMode{ wrapMode } {}
+    EditorLink(const ed::LinkId idVal, const ed::PinId startPinIdVal, const ed::PinId endPinIdVal,
+               const Filter filterVal = Filter::Linear, const Wrap wrapModeVal = Wrap::Repeat)
+        : id(idVal), startPinId(startPinIdVal), endPinId(endPinIdVal), filter{ filterVal }, wrapMode{ wrapModeVal } {}
 };
 
 class PipelineEditor final {

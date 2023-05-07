@@ -17,9 +17,12 @@
 #include "shadertoy/Config.hpp"
 #include <memory>
 #include <string>
-#pragma warning(push, 0)
+
+#include "shadertoy/SuppressWarningPush.hpp"
+
 #include <hello_imgui/hello_imgui.h>
-#pragma warning(pop)
+
+#include "shadertoy/SuppressWarningPop.hpp"
 
 SHADERTOY_NAMESPACE_BEGIN
 
@@ -29,7 +32,7 @@ struct DoubleBuffered final {
     T t1, t2;
 
     explicit DoubleBuffered(T t) : t1{ t }, t2{ t } {}
-    explicit DoubleBuffered(T t1, T t2) : t1{ t1 }, t2{ t2 } {}
+    explicit DoubleBuffered(T t1Val, T t2Val) : t1{ t1Val }, t2{ t2Val } {}
     T get() {
         std::swap(t1, t2);
         return t1;
