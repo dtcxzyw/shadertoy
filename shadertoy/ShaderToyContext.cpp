@@ -15,6 +15,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "shadertoy/ShaderToyContext.hpp"
 #include <cassert>
+#include <cmath>
 #include <ctime>
 #include <imgui.h>
 
