@@ -26,9 +26,9 @@ jobs:
     - name: Install
       run: |
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
-        rm -f ${{github.workspace}}/install/README.md
-        rm -f ${{github.workspace}}/install/*.ilk
-        rm -f ${{github.workspace}}/install/*.pdb
+        rm -Force ${{github.workspace}}/install/README.md
+        rm -Force ${{github.workspace}}/install/*.ilk
+        rm -Force ${{github.workspace}}/install/*.pdb
     
     - uses: actions/upload-artifact@v3
       with:
