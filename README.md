@@ -8,6 +8,23 @@ Unofficial ShaderToy live viewer
 
 ## Gallery
 
+![[goo](https://www.shadertoy.com/view/lllBDM)](https://user-images.githubusercontent.com/15650457/236786522-80c10c46-f3b0-46f3-88ef-abbe39c3cd5f.png)
+
+
+![[expansive reaction-diffusion](https://www.shadertoy.com/view/4dcGW2)](https://user-images.githubusercontent.com/15650457/236787527-b26fa835-1d36-4dc6-be59-6d508e898e04.png)
+
+
+![[mandelbrot](https://www.shadertoy.com/view/lsX3W4)](https://user-images.githubusercontent.com/15650457/236788040-2411c757-7c51-407a-869f-5c6709bf5e5d.png)
+
+![[MultiscaleMIPFluid](https://www.shadertoy.com/view/tsKXR3)](https://user-images.githubusercontent.com/15650457/236790106-5ebeb8a2-0c16-4cbd-a7cf-d8bbb21ad613.png)
+
+![[RainbowSand](https://www.shadertoy.com/view/stdyRr)](https://user-images.githubusercontent.com/15650457/236790355-c20303e1-7abd-4d42-9088-2133a0e756fa.png)
+
+![[subsurface](https://www.shadertoy.com/view/dltGWl)](https://user-images.githubusercontent.com/15650457/236790664-3defcade-c5b4-4f9c-9f21-0a1b67b72536.png)
+
+![[noise-contour](https://www.shadertoy.com/view/MscSzf)](https://user-images.githubusercontent.com/15650457/236791146-b3b9cdff-6754-42ae-83c3-d69ef2ea9387.png)
+
+
 ## Features
 
 Render passes:
@@ -50,7 +67,7 @@ See [Releases Page](https://github.com/dtcxzyw/shadertoy/releases) for pre-built
 ### Prerequisites
 + Windows/Linux x86-64
 + CMake 3.12+
-+ vcpkg
++ [vcpkg](https://github.com/microsoft/vcpkg)
 + Graphics API: OpenGL 4.5+
 
 ### Clone the repository
@@ -61,7 +78,7 @@ cd shadertoy
 
 ### Configure and build
 ```bash
-cmake -B build -DCMAKE_INSTALL_PREFIX=<path-to-prefix> -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<path-to-prefix> -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>/scripts/buildsystems/vcpkg.cmake
 cmake --build build -j
 cmake --build build -t install
 ```
