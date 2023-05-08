@@ -29,6 +29,8 @@ jobs:
         rm -Force ${{github.workspace}}/install/README.md
         rm -Force ${{github.workspace}}/install/*.ilk
         rm -Force ${{github.workspace}}/install/*.pdb
+        mv -Force ${{github.workspace}}/install/${{env.BUILD_TYPE}}/* ${{github.workspace}}/install/
+        rm -Force ${{github.workspace}}/install/${{env.BUILD_TYPE}}/
     
     - uses: actions/upload-artifact@v3
       with:
