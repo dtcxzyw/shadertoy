@@ -31,7 +31,9 @@ jobs:
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
         rm -f ${{github.workspace}}/install/README.md
         # Maintaining file permissions
-        tar -zcvf ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz ${{github.workspace}}/install
+        chmod +x ${{github.workspace}}/install/shadertoy
+        mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-linux-x86_64
+        tar -zcvf ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz --directory ${{github.workspace}} ${{github.workspace}}/shadertoy-linux-x86_64
 
     - uses: actions/upload-artifact@v3
       with:
