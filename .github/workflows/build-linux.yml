@@ -33,7 +33,7 @@ jobs:
         # Maintaining file permissions
         chmod +x ${{github.workspace}}/install/shadertoy
         mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-linux-x86_64
-        tar -zcvf ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz --directory ${{github.workspace}} ${{github.workspace}}/shadertoy-linux-x86_64
+        tar -zcvf ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz --directory ${{github.workspace}} shadertoy-linux-x86_64
 
     - uses: actions/upload-artifact@v3
       with:
