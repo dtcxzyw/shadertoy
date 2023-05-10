@@ -30,10 +30,12 @@ jobs:
       run: |
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
         rm -f ${{github.workspace}}/install/README.md
+        # Maintaining file permissions
+        tar -zcvf ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz ${{github.workspace}}/install
 
     - uses: actions/upload-artifact@v3
       with:
         name: build-linux
-        path: ${{github.workspace}}/install
+        path: ${{github.workspace}}/shadertoy-linux-x86_64.tar.gz
         if-no-files-found: error
       
