@@ -21,12 +21,15 @@
 
 #include <fmt/format.h>
 #include <hello_imgui/hello_imgui.h>
+#include <hello_imgui/hello_imgui_screenshot.h>
 #include <httplib.h>
 #include <magic_enum.hpp>
 #include <misc/cpp/imgui_stdlib.h>
 #include <nfd.h>
 #include <nlohmann/json.hpp>
 #include <openssl/crypto.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 #define GL_SILENCE_DEPRECATION  // NOLINT(clang-diagnostic-unused-macros)
 #include <GL/glew.h>
@@ -58,6 +61,56 @@ static void openURL(const std::string& url) {
     const auto ret = std::system(("open " + url).c_str());
     SHADERTOY_UNUSED(ret);
 #endif
+}
+
+static std::optional<std::function<void()>> takeScreenshot;
+static void saveScreenshot(const ImVec4& bound) {
+    const auto [width, height, bufferRgb] = HelloImGui::AppWindowScreenshotRgbBuffer();
+    if(bufferRgb.empty()) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to get screenshot since it is not supported by the backend");
+        return;
+    }
+
+    std::vector<uint8_t> img;
+    const auto bx = std::max(static_cast<int32_t>(bound.x), 0), by = std::max(static_cast<int32_t>(bound.y), 0),
+               ex = std::min(static_cast<int32_t>(bound.z), static_cast<int32_t>(width)),
+               ey = std::min(static_cast<int32_t>(bound.w), static_cast<int32_t>(height));
+    if(bx >= ex || by >= ey)
+        return;
+
+    const auto w = ex - bx;
+    const auto h = ey - by;
+    img.resize(static_cast<size_t>(w * h) * 3);
+    for(auto y = by; y < ey; ++y) {
+        std::copy(bufferRgb.begin() + static_cast<ptrdiff_t>((static_cast<size_t>(y) * width + bx) * 3),
+                  bufferRgb.begin() + static_cast<ptrdiff_t>((static_cast<size_t>(y) * width + bx + w) * 3),
+                  img.begin() + static_cast<ptrdiff_t>(static_cast<size_t>(y - by) * w * 3));
+    }
+
+    nfdchar_t* path;
+    if(NFD_SaveDialog("png,jpg,bmp,tga", nullptr, &path) != NFD_OKAY)
+        return;
+
+    auto handleStbError = [](const int ret) {
+        if(ret == 0) {
+            HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to save the screenshot");
+        }
+    };
+
+    const std::string_view imgPath = path;
+    const auto data = img.data();
+    const auto stride = w * 3;
+    if(imgPath.ends_with("png")) {
+        handleStbError(stbi_write_png(path, w, h, 3, data, stride));
+    } else if(imgPath.ends_with("jpg")) {
+        handleStbError(stbi_write_jpg(path, w, h, 3, data, 90));
+    } else if(imgPath.ends_with("bmp")) {
+        handleStbError(stbi_write_bmp(path, w, h, 3, data));
+    } else if(imgPath.ends_with("tga")) {
+        handleStbError(stbi_write_tga(path, w, h, 3, data));
+    } else {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Unrecognized image format");
+    }
 }
 
 static void showCanvas(ShaderToyContext& ctx) {
@@ -102,11 +155,14 @@ static void showCanvas(ShaderToyContext& ctx) {
     }
 
     const auto mouse = ctx.getMouseStatus();
-    // TODO: record
     ImGui::SameLine();
     ImGui::Text("% 6.2f % 9.2f fps % 4d x% 4d [%d %d %d %d]", static_cast<double>(ctx.getTime()),
                 static_cast<double>(ImGui::GetIO().Framerate), static_cast<int>(size.x), static_cast<int>(size.y),
                 static_cast<int>(mouse.x), static_cast<int>(mouse.y), static_cast<int>(mouse.z), static_cast<int>(mouse.w));
+    ImGui::SameLine();
+    if(ImGui::Button(ICON_FA_CAMERA)) {
+        takeScreenshot = [&ctx] { saveScreenshot(ctx.getBound()); };
+    }
     ImGui::End();
 }
 
@@ -126,6 +182,7 @@ static void showMenu() {
             }
         }
         if(ImGui::MenuItem("Save shader")) {
+            // const auto defaultPath = editor.getShaderName() + ".sttf";
             nfdchar_t* path;
             if(NFD_SaveDialog("sttf", nullptr, &path) == NFD_OKAY) {
                 editor.saveSTTF(path);
@@ -253,6 +310,12 @@ int shaderToyMain(int argc, char** argv) {
     runnerParams.callbacks.ShowGui = [] {
         showImportModal();
         showAboutModal();
+    };
+    runnerParams.callbacks.PreNewFrame = [] {
+        if(takeScreenshot.has_value()) {
+            (*takeScreenshot)();
+            takeScreenshot.reset();
+        }
     };
 
     runnerParams.callbacks.LoadAdditionalFonts = [] { HelloImGui::ImGuiDefaultSettings::LoadDefaultFont_WithFontAwesomeIcons(); };

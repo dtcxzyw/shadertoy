@@ -175,12 +175,12 @@ class PipelineEditor final {
     bool mMetadataEditorRequestFocus = false;
 
     uint32_t nextId();
-    bool isPinLinked(ed::PinId id) const;
-    EditorNode* findNode(ed::NodeId id) const;
-    EditorPin* findPin(ed::PinId id) const;
-    bool isUniqueName(const std::string_view& name, const EditorNode* exclude) const;
-    std::string generateUniqueName(const std::string_view& base) const;
-    bool canCreateLink(const EditorPin* startPin, const EditorPin* endPin) const;
+    [[nodiscard]] bool isPinLinked(ed::PinId id) const;
+    [[nodiscard]] EditorNode* findNode(ed::NodeId id) const;
+    [[nodiscard]] EditorPin* findPin(ed::PinId id) const;
+    [[nodiscard]] bool isUniqueName(const std::string_view& name, const EditorNode* exclude) const;
+    [[nodiscard]] std::string generateUniqueName(const std::string_view& base) const;
+    [[nodiscard]] bool canCreateLink(const EditorPin* startPin, const EditorPin* endPin) const;
 
     void setupInitialPipeline();
     void renderEditor();
@@ -203,6 +203,7 @@ public:
     void loadSTTF(const std::string& path);
     void saveSTTF(const std::string& path);
     void loadFromShaderToy(const std::string& path);
+    [[nodiscard]] std::string getShaderName() const;
 
     static PipelineEditor& get();
 };

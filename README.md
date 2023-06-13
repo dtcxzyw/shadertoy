@@ -54,7 +54,7 @@ Utilities:
 + [x] Render pass editor
 + [x] GLSL shader editor
 + [x] Export/import shaders in STTF(ShaderToy Transmission Format)
-+ [ ] Screenshots
++ [x] Screenshots
 + [ ] Video recording
 + [ ] Custom uniforms
 + [ ] Custom meshes

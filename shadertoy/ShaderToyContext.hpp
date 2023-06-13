@@ -32,6 +32,7 @@ class ShaderToyContext final {
     ImVec2 mSize;
     ImVec4 mMouse{ 0.0f, 0.0f, -1.0f, -1.0f };
     ImVec4 mDate;
+    ImVec4 mBound;
 
     std::unique_ptr<Pipeline> mPipeline;
 
@@ -57,6 +58,9 @@ public:
 
     [[nodiscard]] ImVec4 getMouseStatus() const noexcept {
         return mMouse;
+    }
+    [[nodiscard]] ImVec4 getBound() const noexcept {
+        return mBound;
     }
     [[nodiscard]] bool isValid() const noexcept {
         return static_cast<bool>(mPipeline);

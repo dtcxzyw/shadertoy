@@ -1367,4 +1367,12 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     mShouldBuildPipeline = true;
 }
 
+std::string PipelineEditor::getShaderName() const {
+    using namespace std::string_view_literals;
+    for(auto [k, v] : mMetadata)
+        if(k == "Name"sv || k == "name"sv)
+            return v;
+    return "untitled";
+}
+
 SHADERTOY_NAMESPACE_END
