@@ -81,7 +81,7 @@ uint32_t PipelineEditor::nextId() {
 }
 
 void PipelineEditor::setupInitialPipeline() {
-    auto& shader = spawnShader();
+    auto& shader = spawnShader(NodeType::Image);
     shader.editor.setText(initialShader);
     auto& sink = spawnRenderOutput();
 
@@ -144,7 +144,7 @@ void PipelineEditor::resetLayout() {
 
     float selfX = 0;
     for(auto& layer : layers | std::views::values) {
-        constexpr auto width = 400.0f;
+        constexpr auto width = 500.0f;
         auto getBarycenter = [&](const EditorNode* u) {
             if(const auto iter = barycenter.find(u); iter != barycenter.cend()) {
                 return iter->second.first / iter->second.second;
@@ -208,6 +208,7 @@ EditorTexture& PipelineEditor::spawnTexture() {
 }
 EditorCubeMap& PipelineEditor::spawnCubeMap() {
     auto ret = std::make_unique<EditorCubeMap>(nextId(), generateUniqueName("CubeMap"));
+    ret->type = NodeType::CubeMap;
     ret->outputs.emplace_back(nextId(), "Output", NodeType::CubeMap);
     return buildNode(mNodes, std::move(ret));
 }
@@ -226,12 +227,13 @@ EditorLastFrame& PipelineEditor::spawnLastFrame() {
     ret->outputs.emplace_back(nextId(), "Output", NodeType::Image);
     return buildNode(mNodes, std::move(ret));
 }
-EditorShader& PipelineEditor::spawnShader() {
+EditorShader& PipelineEditor::spawnShader(NodeType type) {
     auto ret = std::make_unique<EditorShader>(nextId(), generateUniqueName("Shader"));
+    ret->type = type;
     for(uint32_t idx = 0; idx < 4; ++idx) {
         ret->inputs.emplace_back(nextId(), fmt::format("Channel{}", idx).c_str(), NodeType::Image);
     }
-    ret->outputs.emplace_back(nextId(), "Output", NodeType::Image);
+    ret->outputs.emplace_back(nextId(), "Output", type);
     return buildNode(mNodes, std::move(ret));
 }
 
@@ -587,7 +589,7 @@ void PipelineEditor::renderEditor() {
 
         ImGui::Separator();
         if(ImGui::MenuItem("Shader"))
-            node = &spawnShader();
+            node = &spawnShader(NodeType::Image);
 
         ImGui::Separator();
         if(!hasClass(NodeClass::RenderOutput) && ImGui::MenuItem("Render Output"))
@@ -792,7 +794,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
     auto pipeline = createPipeline();
     std::unordered_map<EditorNode*, DoubleBufferedTex> textureMap;
     std::unordered_map<EditorNode*, ImVec2> textureSizeMap;
-    std::unordered_map<EditorNode*, DoubleBufferedFB> frameBufferMap;
+    std::unordered_map<EditorNode*, std::vector<DoubleBufferedFB>> frameBufferMap;
     std::unordered_set<EditorNode*> requireDoubleBuffer;
     for(auto node : order) {
         if(node->getClass() == NodeClass::LastFrame) {
@@ -807,23 +809,43 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
     // TODO: FB allocation
     for(auto node : order) {
         if(node->getClass() == NodeClass::GLSLShader) {
-            DoubleBufferedFB frameBuffer{ nullptr, false };
-            if(requireDoubleBuffer.contains(node)) {
-                auto t1 = pipeline->createFrameBuffer();
-                auto t2 = pipeline->createFrameBuffer();
-                frameBuffer = DoubleBufferedFB{ t1, t2, false };
-            } else if(node != directRenderNode) {
-                auto t = pipeline->createFrameBuffer();
-                frameBuffer = DoubleBufferedFB{ t, false };
+            if(node->type == NodeType::Image) {
+                DoubleBufferedFB frameBuffer{ nullptr };
+                if(requireDoubleBuffer.contains(node)) {
+                    auto t1 = pipeline->createFrameBuffer();
+                    auto t2 = pipeline->createFrameBuffer();
+                    frameBuffer = DoubleBufferedFB{ t1, t2 };
+                } else if(node != directRenderNode) {
+                    auto t = pipeline->createFrameBuffer();
+                    frameBuffer = DoubleBufferedFB{ t };
+                }
+                frameBufferMap.emplace(node, std::vector<DoubleBufferedFB>{ frameBuffer });
+            } else if(node->type == NodeType::CubeMap) {
+                std::vector<DoubleBufferedFB> buffers;
+                buffers.reserve(6);
+                if(requireDoubleBuffer.contains(node)) {
+                    auto t1 = pipeline->createCubeMapFrameBuffer();
+                    auto t2 = pipeline->createCubeMapFrameBuffer();
+                    for(uint32_t idx = 0; idx < 6; ++idx)
+                        buffers.emplace_back(t1[idx], t2[idx]);
+                } else {
+                    assert(node != directRenderNode);
+                    auto t = pipeline->createCubeMapFrameBuffer();
+                    for(uint32_t idx = 0; idx < 6; ++idx)
+                        buffers.emplace_back(t[idx]);
+                }
+                frameBufferMap.emplace(node, std::move(buffers));
+            } else {
+                HelloImGui::Log(HelloImGui::LogLevel::Error, "Unsupported shader type");
+                throw Error{};
             }
-            frameBufferMap.emplace(node, frameBuffer);
         }
     }
 
     for(auto node : order) {
         switch(node->getClass()) {
             case NodeClass::GLSLShader: {
-                auto target = frameBufferMap.at(node);
+                auto& target = frameBufferMap.at(node);
                 std::vector<Channel> channels;
                 if(auto it = graph.find(node); it != graph.cend()) {
                     for(auto [v, idx, link] : it->second) {
@@ -836,15 +858,19 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 // TODO: error markers
                 auto guard = scopeFail(
                     [&] { HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to compile shader %s", node->name.c_str()); });
-                pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), target, std::move(channels));
-                if(target.t1)
-                    textureMap.emplace(node, DoubleBufferedTex{ target.t1->getTexture(), target.t2->getTexture(), false });
+                pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), node->type, target, std::move(channels));
+                if(target.front().t1)
+                    textureMap.emplace(node,
+                                       DoubleBufferedTex{ target.front().t1->getTexture(), target.front().t2->getTexture(),
+                                                          node->type == NodeType::CubeMap });
                 break;
             }
             case NodeClass::LastFrame: {
-                auto target = frameBufferMap.at(dynamic_cast<EditorLastFrame*>(node)->lastFrame);
+                const auto ref = dynamic_cast<EditorLastFrame*>(node)->lastFrame;
+                auto target = frameBufferMap.at(ref).front();
                 assert(target.t1 && target.t2);
-                textureMap.emplace(node, DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(), false });
+                textureMap.emplace(
+                    node, DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(), ref->type == NodeType::CubeMap });
                 break;
             }
             case NodeClass::RenderOutput: {
@@ -888,6 +914,7 @@ void PipelineEditor::build(ShaderToyContext& context) {
 }
 
 void PipelineEditor::render(ShaderToyContext& context) {
+    updateNodeType();
     if(!ImGui::Begin("Editor", nullptr)) {
         ImGui::End();
         return;
@@ -994,6 +1021,9 @@ void EditorShader::renderContent() {
     if(ImGui::Button(ICON_FA_EDIT " Edit")) {
         isOpen = true;
         requestFocus = true;
+    }
+    if(ImGui::Button(magic_enum::enum_name(type).data())) {
+        type = static_cast<NodeType>((static_cast<uint32_t>(type) + 1) % 3);
     }
 }
 std::unique_ptr<Node> EditorShader::toSTTF() const {
@@ -1181,7 +1211,7 @@ void PipelineEditor::loadSTTF(const std::string& path) {
                     newNode = &spawnRenderOutput();
                 } break;
                 case NodeClass::GLSLShader: {
-                    newNode = &spawnShader();
+                    newNode = &spawnShader(node->getNodeType());
                 } break;
                 case NodeClass::Texture: {
                     newNode = &spawnTexture();
@@ -1284,7 +1314,8 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     mMetadata.emplace_back("ShaderToyURL", url);
 
     auto renderPasses = json[0].at("renderpass");
-    auto getOrder = [](const std::string& name) { return std::toupper(name.back()); };
+    // BA BB BC BD CA IE
+    auto getOrder = [](const std::string& name) { return std::toupper(name.front()) * 1000 + std::toupper(name.back()); };
 
     std::unordered_map<std::string, EditorShader*> newShaderNodes;
 
@@ -1399,6 +1430,11 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         cubeMapCache.emplace(id, &texture);
         return &texture;
     };
+    std::unordered_set<std::string> passIds;
+    const auto isDynamicCubeMap = [&](nlohmann::json& tex) {
+        const auto id = tex.at("id").get<std::string>();
+        return passIds.contains(id);
+    };
     std::string common;
     for(auto& pass : renderPasses) {
         if(pass.at("name").get<std::string>().empty()) {
@@ -1407,6 +1443,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         if(pass.at("outputs").empty()) {
             pass.at("outputs").push_back(nlohmann::json::object({ { "id", "tmp" + std::to_string(nextId()) } }));
         }
+        passIds.insert(pass.at("outputs")[0].at("id").get<std::string>());
     }
     for(auto& pass : renderPasses) {
         const auto type = pass.at("type").get<std::string>();
@@ -1414,9 +1451,9 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         const auto name = pass.at("name").get<std::string>();
         if(type == "common") {
             common = code + '\n';
-        } else if(type == "image" || type == "buffer") {
+        } else if(type == "image" || type == "buffer" || type == "cubemap") {
             const auto output = pass.at("outputs")[0].at("id").get<std::string>();
-            auto& node = spawnShader();
+            auto& node = spawnShader(type != "cubemap" ? NodeType::Image : NodeType::CubeMap);
             node.editor.setText(code);
             node.name = name;
             newShaderNodes.emplace(output, &node);
@@ -1432,7 +1469,10 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 } else if(inputType == "texture") {
                     addLink(getTexture(input), &node, channel, &input);
                 } else if(inputType == "cubemap") {
-                    addLink(getCubeMap(input), &node, channel, &input);
+                    if(!isDynamicCubeMap(input))
+                        addLink(getCubeMap(input), &node, channel, &input);
+                    else
+                        continue;
                 } else {
                     Log(HelloImGui::LogLevel::Error, "Unsupported input type %s", inputType.c_str());
                 }
@@ -1467,14 +1507,14 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         if(type == "common") {
             continue;
         }
-        if(type == "image" || type == "buffer") {
+        if(type == "image" || type == "buffer" || type == "cubemap") {
             const auto name = pass.at("name").get<std::string>();
             const auto idxDst = getOrder(name);
             const auto node = newShaderNodes.at(pass.at("outputs")[0].at("id").get<std::string>());
 
             for(auto& input : pass.at("inputs")) {
                 auto inputType = input.at("type").get<std::string>();
-                if(inputType != "buffer") {
+                if(!(inputType == "buffer" || (inputType == "cubemap" && isDynamicCubeMap(input)))) {
                     continue;
                 }
 
@@ -1502,6 +1542,51 @@ std::string PipelineEditor::getShaderName() const {
         if(k == "Name"sv || k == "name"sv)
             return v;
     return "untitled";
+}
+
+void PipelineEditor::updateNodeType() {
+    while(true) {
+        bool modified = false;
+        auto sync = [&](NodeType& x, NodeType y) {
+            if(x == y)
+                return;
+            x = y;
+            modified = true;
+        };
+
+        // last frame
+        for(auto& node : mNodes) {
+            if(node->getClass() == NodeClass::LastFrame) {
+                auto& lastFrame = dynamic_cast<EditorLastFrame&>(*node);
+                if(std::ranges::count(mShaderNodes, lastFrame.lastFrame) && lastFrame.lastFrame->type != lastFrame.type) {
+                    sync(lastFrame.type, lastFrame.lastFrame->type);
+                }
+            }
+        }
+
+        std::unordered_map<uintptr_t, ed::PinId> graph;
+        for(auto link : mLinks) {
+            assert(!graph.contains(link.endPinId.Get()));
+            graph.emplace(link.endPinId.Get(), link.startPinId);
+        }
+        for(const auto& node : mNodes) {
+            // input pin
+            for(auto& input : node->inputs) {
+                if(auto iter = graph.find(input.id.Get()); iter != graph.cend()) {
+                    sync(input.type, findPin(iter->second)->node->type);
+                } else {
+                    sync(input.type, NodeType::Image);
+                }
+            }
+
+            // output pin
+            for(auto& output : node->outputs)
+                sync(output.type, node->type);
+        }
+
+        if(!modified)
+            return;
+    }
 }
 
 SHADERTOY_NAMESPACE_END

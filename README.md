@@ -34,7 +34,7 @@ See [examples](examples) for more shaders.
 Render passes:
 
 + [x] Image
-+ [ ] Cubemap
++ [x] Cubemap
 + [ ] Sound
 + [x] Buffer
 + [x] Common 

@@ -25,25 +25,35 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
+static const char* const shaderVersionDirective = "#version 450 core\n";
+static const char* const shaderCubeMapDef = "#define INTERFACE_SHADERTOY_CUBE_MAP\n";
 static const char* const shaderVertexSrc = R"(
-#version 450 core
-
 layout (location = 0) in vec2 pos;
 layout (location = 1) in vec2 texCoord;
+#ifdef INTERFACE_SHADERTOY_CUBE_MAP
+layout (location = 2) in vec3 point;
+#endif
 
 layout (location = 0) out vec2 f_fragCoord;
+#ifdef INTERFACE_SHADERTOY_CUBE_MAP
+layout (location = 1) out vec3 f_point;
+#endif
 
 void main() {
     gl_Position = vec4(pos, 1.0f, 1.0f);
     f_fragCoord = texCoord;
+#ifdef INTERFACE_SHADERTOY_CUBE_MAP
+    f_point = point;
+#endif
 }
 
 )";
 
 static const char* const shaderPixelHeader = R"(
-#version 450 core
-
 layout (location = 0) in vec2 f_fragCoord;
+#ifdef INTERFACE_SHADERTOY_CUBE_MAP
+layout (location = 1) in vec3 f_point;
+#endif
 
 layout (location = 0) out vec4 out_frag_color;
 
@@ -60,8 +70,12 @@ uniform vec3 iChannelResolution[4];
 
 static const char* const shaderPixelFooter = R"(
 void main() {
-    vec4 output_color = vec4(1.0f);
+    vec4 output_color = vec4(0.0f);
+#ifndef INTERFACE_SHADERTOY_CUBE_MAP
     mainImage(output_color, f_fragCoord);
+#else
+    mainCubemap(output_color, f_fragCoord, vec3(0.0), normalize(f_point));
+#endif
     out_frag_color = output_color;
 }
 )";
@@ -69,6 +83,28 @@ void main() {
 struct Vertex final {
     ImVec2 pos;
     ImVec2 coord;
+};
+
+using Vec3 = std::array<float, 3>;
+
+constexpr Vec3 cubeMapVertexPos[8] = { { -1.0f, -1.0f, -1.0f }, { -1.0f, -1.0f, 1.0f },  //
+                                       { -1.0f, 1.0f, -1.0f },  { -1.0f, 1.0f, 1.0f },   //
+                                       { 1.0f, -1.0f, -1.0f },  { 1.0f, -1.0f, 1.0f },   //
+                                       { 1.0f, 1.0f, -1.0f },   { 1.0f, 1.0f, 1.0f } };
+// left-bottom left-top right-top right-bottom
+constexpr uint32_t cubeMapVertexIndex[6][4] = {
+    { 4, 6, 7, 5 },  // right
+    { 1, 3, 2, 0 },  // left
+    { 2, 3, 7, 6 },  // top
+    { 1, 0, 4, 5 },  // bottom
+    { 5, 7, 3, 1 },  // back
+    { 0, 2, 6, 4 }   // front
+};
+
+struct VertexCubeMap final {
+    ImVec2 pos;
+    ImVec2 coord;
+    Vec3 point;
 };
 
 static void checkShaderCompileError(const GLuint shader, const std::string_view type) {
@@ -140,9 +176,69 @@ public:
     }
 };
 
+static constexpr uint32_t cubeMapRenderTargetSize = 1024;
+class GLCubeMapRenderTarget final {
+    GLuint mTex{};
+
+public:
+    GLCubeMapRenderTarget() {
+        glGenTextures(1, &mTex);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, mTex);
+        for(int32_t idx = 0; idx < 6; ++idx) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + idx, 0, GL_RGBA16F, static_cast<GLsizei>(cubeMapRenderTargetSize),
+                         static_cast<GLsizei>(cubeMapRenderTargetSize), 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+        }
+        glBindTexture(GL_TEXTURE_CUBE_MAP, GL_NONE);
+    }
+    GLCubeMapRenderTarget(const GLCubeMapRenderTarget&) = delete;
+    GLCubeMapRenderTarget(GLCubeMapRenderTarget&&) = delete;
+    GLCubeMapRenderTarget& operator=(const GLCubeMapRenderTarget&) = delete;
+    GLCubeMapRenderTarget& operator=(GLCubeMapRenderTarget&&) = delete;
+    ~GLCubeMapRenderTarget() {
+        glDeleteTextures(1, &mTex);
+    }
+    [[nodiscard]] GLuint getTexture() const {
+        return mTex;
+    }
+};
+
+class GLCubeMapFrameBuffer final : public FrameBuffer {
+    GLuint mFBO{};
+    GLuint mTexture{};
+
+public:
+    GLCubeMapFrameBuffer(GLuint texture, uint32_t idx) : mTexture{ texture } {
+        glGenFramebuffers(1, &mFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, mFBO);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, mTexture);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + idx, mTexture, 0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, GL_NONE);
+        glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
+    }
+    GLCubeMapFrameBuffer(const GLCubeMapFrameBuffer&) = delete;
+    GLCubeMapFrameBuffer(GLCubeMapFrameBuffer&&) = delete;
+    GLCubeMapFrameBuffer& operator=(const GLCubeMapFrameBuffer&) = delete;
+    GLCubeMapFrameBuffer& operator=(GLCubeMapFrameBuffer&&) = delete;
+    ~GLCubeMapFrameBuffer() override {
+        glDeleteFramebuffers(1, &mFBO);
+    }
+    void bind(const uint32_t, const uint32_t) override {
+        glBindFramebuffer(GL_FRAMEBUFFER, mFBO);
+        assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    }
+    void unbind() override {
+        glBindFramebuffer(GL_FRAMEBUFFER, GL_NONE);
+    }
+
+    [[nodiscard]] uintptr_t getTexture() const override {
+        return mTexture;
+    }
+};
+
 class RenderPass final {
     GLuint mProgram;
-    DoubleBufferedFB mBuffer;
+    std::vector<DoubleBufferedFB> mBuffers;
+    NodeType mType;
     GLint mLocationResolution;
     GLint mLocationTime;
     GLint mLocationTimeDelta;
@@ -155,29 +251,38 @@ class RenderPass final {
     std::vector<Channel> mChannels;
 
 public:
-    RenderPass(const std::string& src, const DoubleBufferedFB& buffer, std::vector<Channel> channels)
-        : mBuffer{ buffer }, mChannels{ std::move(channels) } {
-        std::string realSrc = shaderPixelHeader;
-        for(auto& channel : mChannels) {
-            realSrc += "uniform sampler";
-            realSrc += channel.tex.isCube ? "Cube" : "2D";
-            realSrc += " iChannel";
-            realSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
-            realSrc += ";\n";
+    RenderPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> buffer, std::vector<Channel> channels)
+        : mBuffers{ std::move(buffer) }, mType{ type }, mChannels{ std::move(channels) } {
+        std::string vertexSrc = shaderVersionDirective;
+        std::string pixelSrc = shaderVersionDirective;
+        if(type == NodeType::CubeMap) {
+            vertexSrc += shaderCubeMapDef;
+            pixelSrc += shaderCubeMapDef;
         }
-        realSrc += src;
-        realSrc += shaderPixelFooter;
-        const auto realSrcData = realSrc.c_str();
+        vertexSrc += shaderVertexSrc;
+        pixelSrc += shaderPixelHeader;
+        for(auto& channel : mChannels) {
+            pixelSrc += "uniform sampler";
+            pixelSrc += channel.tex.isCube ? "Cube" : "2D";
+            pixelSrc += " iChannel";
+            pixelSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
+            pixelSrc += ";\n";
+        }
+        pixelSrc += src;
+        pixelSrc += shaderPixelFooter;
+
+        const auto vertexSrcData = vertexSrc.c_str();
+        const auto pixelSrcData = pixelSrc.c_str();
 
         const auto shaderVertex = glCreateShader(GL_VERTEX_SHADER);
         auto vertGuard = scopeExit([&] { glDeleteShader(shaderVertex); });
-        glShaderSource(shaderVertex, 1, &shaderVertexSrc, nullptr);
+        glShaderSource(shaderVertex, 1, &vertexSrcData, nullptr);
         glCompileShader(shaderVertex);
         checkShaderCompileError(shaderVertex, "VERTEX");
 
         const auto shaderPixel = glCreateShader(GL_FRAGMENT_SHADER);
         auto pixelGuard = scopeExit([&] { glDeleteShader(shaderPixel); });
-        glShaderSource(shaderPixel, 1, &realSrcData, nullptr);
+        glShaderSource(shaderPixel, 1, &pixelSrcData, nullptr);
         glCompileShader(shaderPixel);
         checkShaderCompileError(shaderPixel, "PIXEL");
 
@@ -219,108 +324,137 @@ public:
     ~RenderPass() {
         glDeleteProgram(mProgram);
     }
-    void render(ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, ImVec2 base, const ImVec2 size,
+    [[nodiscard]] NodeType getType() const noexcept {
+        return mType;
+    }
+    void render(ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, ImVec2 base, ImVec2 size,
                 const ShaderToyUniform& uniform, const GLuint vao, const GLuint vbo) {
         glDisable(GL_BLEND);
-        const auto buffer = mBuffer.get();
-        if(buffer) {
-            glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
-            glDisable(GL_SCISSOR_TEST);
-            buffer->bind(static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y));
-            base = { 0, 0 };
-            frameBufferSize = size;
-        } else {
-            glViewport(0, 0, static_cast<GLsizei>(frameBufferSize.x), static_cast<GLsizei>(frameBufferSize.y));
-            glEnable(GL_SCISSOR_TEST);
-            glScissor(static_cast<GLint>(clipMin.x), static_cast<GLint>(frameBufferSize.y - clipMax.y),
-                      static_cast<GLint>(clipMax.x - clipMin.x), static_cast<GLint>(clipMax.y - clipMin.y));
-        }
-        glUseProgram(mProgram);
-        // update vertex array
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBindVertexArray(vao);
-        std::array vertices{
-            Vertex{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 } },              // left-bottom
-            Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, size.y } },                    // left-top
-            Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ size.x, size.y } },        // right-top
-            Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 } },  // right-bottom
-        };
-        for(auto& [pos, coord] : vertices) {
-            pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
-            pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
-        }
-        glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
+        constexpr ImVec2 cubeMapSize{ static_cast<float>(cubeMapRenderTargetSize), static_cast<float>(cubeMapRenderTargetSize) };
 
-        // update texture
-        for(auto& channel : mChannels) {
-            if(mLocationChannel[channel.slot] == -1)
-                continue;
-            glUniform1i(mLocationChannel[channel.slot], static_cast<GLint>(channel.slot));
-            const auto texSize = channel.size.value_or(size);
-            if(mLocationChannelResolution[channel.slot] != -1)
-                glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
-            glActiveTexture(GL_TEXTURE0 + channel.slot);
-            const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
-            glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
-            const GLint wrapMode = [&] {
-                switch(channel.wrapMode) {
-                    case Wrap::Clamp:
-                        return GL_CLAMP_TO_EDGE;
-                    case Wrap::Repeat:
-                        return GL_REPEAT;
+        for(uint32_t idx = 0; idx < mBuffers.size(); ++idx) {
+            const auto buffer = mBuffers[idx].get();
+
+            if(buffer) {
+                if(mType == NodeType::CubeMap) {
+                    size = cubeMapSize;
                 }
-                SHADERTOY_UNREACHABLE();
-            }();
-            const GLint minFilter = [&] {
-                switch(channel.filter) {
-                    case Filter::Mipmap:
-                        return GL_LINEAR_MIPMAP_LINEAR;
-                    case Filter::Nearest:
-                        return GL_NEAREST;
-                    case Filter::Linear:
-                        return GL_LINEAR;
+                glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
+                glDisable(GL_SCISSOR_TEST);
+                buffer->bind(static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y));
+                base = { 0, 0 };
+                frameBufferSize = size;
+            } else {
+                glViewport(0, 0, static_cast<GLsizei>(frameBufferSize.x), static_cast<GLsizei>(frameBufferSize.y));
+                glEnable(GL_SCISSOR_TEST);
+                glScissor(static_cast<GLint>(clipMin.x), static_cast<GLint>(frameBufferSize.y - clipMax.y),
+                          static_cast<GLint>(clipMax.x - clipMin.x), static_cast<GLint>(clipMax.y - clipMin.y));
+            }
+            glUseProgram(mProgram);
+            // update vertex array
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBindVertexArray(vao);
+            if(mType == NodeType::Image) {
+                std::array vertices{
+                    Vertex{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 } },              // left-bottom
+                    Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, size.y } },                    // left-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ size.x, size.y } },        // right-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 } },  // right-bottom
+                };
+                for(auto& [pos, coord] : vertices) {
+                    pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
+                    pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
                 }
-                SHADERTOY_UNREACHABLE();
-            }();
-            const GLint magFilter = [&] {
-                switch(channel.filter) {
-                    case Filter::Nearest:
-                        return GL_NEAREST;
-                    case Filter::Mipmap:
-                        [[fallthrough]];
-                    case Filter::Linear:
-                        return GL_LINEAR;
+                glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
+            } else {
+                std::array vertices{
+                    VertexCubeMap{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 },
+                                   cubeMapVertexPos[cubeMapVertexIndex[idx][0]] },  // left-bottom
+                    VertexCubeMap{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, size.y },
+                                   cubeMapVertexPos[cubeMapVertexIndex[idx][1]] },  // left-top
+                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y }, ImVec2{ size.x, size.y },
+                                   cubeMapVertexPos[cubeMapVertexIndex[idx][2]] },  // right-top
+                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 },
+                                   cubeMapVertexPos[cubeMapVertexIndex[idx][3]] },  // right-bottom
+                };
+                for(auto& [pos, coord, point] : vertices) {
+                    pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
+                    pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
                 }
-                SHADERTOY_UNREACHABLE();
-            }();
-            if(channel.filter == Filter::Mipmap)
-                glGenerateMipmap(type);
-            glTexParameteri(type, GL_TEXTURE_WRAP_S, wrapMode);
-            glTexParameteri(type, GL_TEXTURE_WRAP_T, wrapMode);
-            glTexParameteri(type, GL_TEXTURE_MIN_FILTER, minFilter);
-            glTexParameteri(type, GL_TEXTURE_MAG_FILTER, magFilter);
+                glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(VertexCubeMap), vertices.data(), GL_STREAM_DRAW);
+            }
+
+            // update texture
+            for(auto& channel : mChannels) {
+                if(mLocationChannel[channel.slot] == -1)
+                    continue;
+                glUniform1i(mLocationChannel[channel.slot], static_cast<GLint>(channel.slot));
+                const auto texSize = channel.size.value_or(channel.tex.isCube ? cubeMapSize : size);
+                if(mLocationChannelResolution[channel.slot] != -1)
+                    glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
+                glActiveTexture(GL_TEXTURE0 + channel.slot);
+                const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+                glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
+                const GLint wrapMode = [&] {
+                    switch(channel.wrapMode) {
+                        case Wrap::Clamp:
+                            return GL_CLAMP_TO_EDGE;
+                        case Wrap::Repeat:
+                            return GL_REPEAT;
+                    }
+                    SHADERTOY_UNREACHABLE();
+                }();
+                const GLint minFilter = [&] {
+                    switch(channel.filter) {
+                        case Filter::Mipmap:
+                            return GL_LINEAR_MIPMAP_LINEAR;
+                        case Filter::Nearest:
+                            return GL_NEAREST;
+                        case Filter::Linear:
+                            return GL_LINEAR;
+                    }
+                    SHADERTOY_UNREACHABLE();
+                }();
+                const GLint magFilter = [&] {
+                    switch(channel.filter) {
+                        case Filter::Nearest:
+                            return GL_NEAREST;
+                        case Filter::Mipmap:
+                            [[fallthrough]];
+                        case Filter::Linear:
+                            return GL_LINEAR;
+                    }
+                    SHADERTOY_UNREACHABLE();
+                }();
+                if(channel.filter == Filter::Mipmap)
+                    glGenerateMipmap(type);
+                glTexParameteri(type, GL_TEXTURE_WRAP_S, wrapMode);
+                glTexParameteri(type, GL_TEXTURE_WRAP_T, wrapMode);
+                glTexParameteri(type, GL_TEXTURE_MIN_FILTER, minFilter);
+                glTexParameteri(type, GL_TEXTURE_MAG_FILTER, magFilter);
+            }
+
+            // update uniform
+            if(mLocationResolution != -1)
+                glUniform3f(mLocationResolution, size.x, size.y, 0.0f);
+            if(mLocationTime != -1)
+                glUniform1f(mLocationTime, uniform.time);
+            if(mLocationTimeDelta != -1)
+                glUniform1f(mLocationTimeDelta, uniform.timeDelta);
+            if(mLocationFrameRate != -1)
+                glUniform1f(mLocationFrameRate, uniform.frameRate);
+            if(mLocationFrame != -1)
+                glUniform1i(mLocationFrame, uniform.frame);
+            if(mLocationMouse != -1)
+                glUniform4f(mLocationMouse, uniform.mouse.x, uniform.mouse.y, uniform.mouse.z, uniform.mouse.w);
+            if(mLocationDate != -1)
+                glUniform4f(mLocationDate, uniform.date.x, uniform.date.y, uniform.date.z, uniform.date.w);
+
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+            if(buffer)
+                buffer->unbind();
+            glActiveTexture(GL_TEXTURE0);  // restore
         }
-
-        // update uniform
-        if(mLocationResolution != -1)
-            glUniform3f(mLocationResolution, size.x, size.y, 0.0f);
-        if(mLocationTime != -1)
-            glUniform1f(mLocationTime, uniform.time);
-        if(mLocationTimeDelta != -1)
-            glUniform1f(mLocationTimeDelta, uniform.timeDelta);
-        if(mLocationFrameRate != -1)
-            glUniform1f(mLocationFrameRate, uniform.frameRate);
-        if(mLocationFrame != -1)
-            glUniform1i(mLocationFrame, uniform.frame);
-        if(mLocationMouse != -1)
-            glUniform4f(mLocationMouse, uniform.mouse.x, uniform.mouse.y, uniform.mouse.z, uniform.mouse.w);
-        if(mLocationDate != -1)
-            glUniform4f(mLocationDate, uniform.date.x, uniform.date.y, uniform.date.z, uniform.date.w);
-
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-        if(buffer)
-            buffer->unbind();
-        glActiveTexture(GL_TEXTURE0);  // restore
     }
 };
 
@@ -402,9 +536,11 @@ struct DynamicTexture final {
 };
 
 class OpenGLPipeline final : public Pipeline {
-    GLuint mVAO{};
+    GLuint mVAOImage{};
+    GLuint mVAOCubeMap{};
     GLuint mVBO{};
     std::vector<std::unique_ptr<FrameBuffer>> mFrameBuffers;
+    std::vector<std::unique_ptr<GLCubeMapRenderTarget>> mCubeMapRenderTargets;
     std::vector<std::unique_ptr<RenderPass>> mRenderPasses;
     std::vector<DynamicTexture> mDynamicTextures;
 
@@ -413,21 +549,35 @@ public:
         glGenBuffers(1, &mVBO);
         glBindBuffer(GL_ARRAY_BUFFER, mVBO);
 
-        glGenVertexArrays(1, &mVAO);
-        glBindVertexArray(mVAO);
+        glGenVertexArrays(1, &mVAOImage);
+        glBindVertexArray(mVAOImage);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), std::bit_cast<void*>(offsetof(Vertex, pos)));
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), std::bit_cast<void*>(offsetof(Vertex, coord)));
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+
+        glGenVertexArrays(1, &mVAOCubeMap);
+        glBindVertexArray(mVAOCubeMap);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
+                              std::bit_cast<void*>(offsetof(VertexCubeMap, pos)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
+                              std::bit_cast<void*>(offsetof(VertexCubeMap, coord)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
+                              std::bit_cast<void*>(offsetof(VertexCubeMap, point)));
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, GL_NONE);
     }
     OpenGLPipeline(const OpenGLPipeline&) = delete;
     OpenGLPipeline(OpenGLPipeline&&) = delete;
     OpenGLPipeline& operator=(const OpenGLPipeline&) = delete;
     OpenGLPipeline& operator=(OpenGLPipeline&&) = delete;
     ~OpenGLPipeline() override {
-        glDeleteVertexArrays(1, &mVAO);
+        glDeleteVertexArrays(1, &mVAOImage);
+        glDeleteVertexArrays(1, &mVAOCubeMap);
         glDeleteBuffers(1, &mVBO);
     }
 
@@ -435,9 +585,23 @@ public:
         mFrameBuffers.push_back(std::make_unique<GLFrameBuffer>());
         return mFrameBuffers.back().get();
     }
+    GLCubeMapRenderTarget* createCubeMapRenderTarget() {
+        mCubeMapRenderTargets.push_back(std::make_unique<GLCubeMapRenderTarget>());
+        return mCubeMapRenderTargets.back().get();
+    }
+    std::vector<FrameBuffer*> createCubeMapFrameBuffer() override {
+        std::vector<FrameBuffer*> buffers;
+        const auto target = createCubeMapRenderTarget();
+        for(uint32_t idx = 0; idx < 6; ++idx) {
+            mFrameBuffers.push_back(std::make_unique<GLCubeMapFrameBuffer>(target->getTexture(), idx));
+            buffers.emplace_back(mFrameBuffers.back().get());
+        }
+        return buffers;
+    }
 
-    void addPass(const std::string& src, DoubleBufferedFB target, std::vector<Channel> channels) override {
-        mRenderPasses.push_back(std::make_unique<RenderPass>(src, target, std::move(channels)));
+    void addPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> target,
+                 std::vector<Channel> channels) override {
+        mRenderPasses.push_back(std::make_unique<RenderPass>(src, type, std::move(target), std::move(channels)));
     }
 
     void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, const ImVec2 base, const ImVec2 size,
@@ -451,7 +615,8 @@ public:
             glBindTexture(GL_TEXTURE_2D, GL_NONE);
         }
         for(const auto& pass : mRenderPasses)
-            pass->render(frameBufferSize, clipMin, clipMax, base, size, uniform, mVAO, mVBO);
+            pass->render(frameBufferSize, clipMin, clipMax, base, size, uniform,
+                         pass->getType() == NodeType::Image ? mVAOImage : mVAOCubeMap, mVBO);
     }
 
     TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) override {

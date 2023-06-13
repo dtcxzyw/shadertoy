@@ -27,20 +27,17 @@
 SHADERTOY_NAMESPACE_BEGIN
 
 using TextureId = uintptr_t;
-template <typename T>
-struct DoubleBuffered final {
-    T t1, t2;
+struct DoubleBufferedTex final {
+    TextureId t1, t2;
     bool isCube;
 
-    explicit DoubleBuffered(T t, bool cube) : t1{ t }, t2{ t }, isCube{ cube } {}
-    explicit DoubleBuffered(T t1Val, T t2Val, bool cube) : t1{ t1Val }, t2{ t2Val }, isCube{ cube } {}
-    T get() {
+    explicit DoubleBufferedTex(TextureId t, bool cube) : t1{ t }, t2{ t }, isCube{ cube } {}
+    explicit DoubleBufferedTex(TextureId t1Val, TextureId t2Val, bool cube) : t1{ t1Val }, t2{ t2Val }, isCube{ cube } {}
+    TextureId get() {
         std::swap(t1, t2);
         return t1;
     }
 };
-
-using DoubleBufferedTex = DoubleBuffered<TextureId>;
 
 struct ShaderToyUniform final {
     float time{};
@@ -75,7 +72,16 @@ public:
     virtual void unbind() = 0;
     [[nodiscard]] virtual TextureId getTexture() const = 0;
 };
-using DoubleBufferedFB = DoubleBuffered<FrameBuffer*>;
+struct DoubleBufferedFB final {
+    FrameBuffer *t1, *t2;
+
+    explicit DoubleBufferedFB(FrameBuffer* t) : t1{ t }, t2{ t } {}
+    explicit DoubleBufferedFB(FrameBuffer* t1Val, FrameBuffer* t2Val) : t1{ t1Val }, t2{ t2Val } {}
+    FrameBuffer* get() {
+        std::swap(t1, t2);
+        return t1;
+    }
+};
 
 struct Channel final {  // NOLINT(cppcoreguidelines-pro-type-member-init)
     uint32_t slot;
@@ -95,7 +101,9 @@ public:
     virtual ~Pipeline() = default;
 
     virtual FrameBuffer* createFrameBuffer() = 0;
-    virtual void addPass(const std::string& src, DoubleBufferedFB target, std::vector<Channel> channels) = 0;
+    virtual std::vector<FrameBuffer*> createCubeMapFrameBuffer() = 0;
+    virtual void addPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> target,
+                         std::vector<Channel> channels) = 0;
     virtual void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
                         const ShaderToyUniform& uniform) = 0;
     virtual TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) = 0;

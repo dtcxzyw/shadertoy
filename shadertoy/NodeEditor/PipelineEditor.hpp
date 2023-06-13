@@ -203,8 +203,9 @@ class PipelineEditor final {
     EditorTexture& spawnTexture();
     EditorRenderOutput& spawnRenderOutput();
     EditorLastFrame& spawnLastFrame();
-    EditorShader& spawnShader();
+    EditorShader& spawnShader(NodeType type);
     EditorKeyboard& spawnKeyboard();
+    void updateNodeType();
     std::unique_ptr<Pipeline> buildPipeline();
 
     friend struct EditorLastFrame;
