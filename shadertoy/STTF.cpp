@@ -63,6 +63,15 @@ void ShaderToyTransmissionFormat::load(const std::string& filePath) {
                     nodeVal = std::make_unique<Texture>(width, height, std::vector<uint32_t>{ begin, end });
                     break;
                 }
+                case NodeClass::CubeMap: {
+                    const auto size = node.at("size").get<uint32_t>();
+                    const auto base64Data = node.at("data").get<std::string>();
+                    const auto decodedData = base64_decode(base64Data);
+                    const auto begin = std::bit_cast<const uint32_t*>(decodedData.data());
+                    const auto end = begin + static_cast<ptrdiff_t>(size) * size * 6;
+                    nodeVal = std::make_unique<CubeMap>(size, std::vector<uint32_t>{ begin, end });
+                    break;
+                }
                 case NodeClass::LastFrame: {
                     nodeVal =
                         std::make_unique<LastFrame>(node.at("ref").get<std::string>(),
@@ -137,6 +146,13 @@ void ShaderToyTransmissionFormat::save(const std::string& filePath) const {
                     jsonNode["data"] = base64_encode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
                     jsonNode["width"] = texture.width;
                     jsonNode["height"] = texture.height;
+                    break;
+                }
+                case NodeClass::CubeMap: {
+                    const auto& texture = dynamic_cast<CubeMap&>(*node);
+                    const auto bytes = as_bytes(std::span{ texture.pixel.begin(), texture.pixel.end() });
+                    jsonNode["data"] = base64_encode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
+                    jsonNode["size"] = texture.size;
                     break;
                 }
                 case NodeClass::LastFrame: {

@@ -54,10 +54,6 @@ uniform float     iFrameRate;            // shader frame rate
 uniform int       iFrame;                // shader playback frame
 uniform vec4      iMouse;                // mouse pixel coords. xy: current (if MLB down), zw: click
 uniform vec4      iDate;                 // Year, month, day, time in seconds in .xyzw
-uniform sampler2D iChannel0;
-uniform sampler2D iChannel1;
-uniform sampler2D iChannel2;
-uniform sampler2D iChannel3;
 uniform vec3 iChannelResolution[4];
 
 )";
@@ -159,9 +155,18 @@ class RenderPass final {
     std::vector<Channel> mChannels;
 
 public:
-    RenderPass(const std::string& src, const DoubleBufferedFB buffer, std::vector<Channel> channels)
+    RenderPass(const std::string& src, const DoubleBufferedFB& buffer, std::vector<Channel> channels)
         : mBuffer{ buffer }, mChannels{ std::move(channels) } {
-        const auto realSrc = shaderPixelHeader + src + shaderPixelFooter;
+        std::string realSrc = shaderPixelHeader;
+        for(auto& channel : mChannels) {
+            realSrc += "uniform sampler";
+            realSrc += channel.tex.isCube ? "Cube" : "2D";
+            realSrc += " iChannel";
+            realSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
+            realSrc += ";\n";
+        }
+        realSrc += src;
+        realSrc += shaderPixelFooter;
         const auto realSrcData = realSrc.c_str();
 
         const auto shaderVertex = glCreateShader(GL_VERTEX_SHADER);
@@ -255,7 +260,8 @@ public:
             if(mLocationChannelResolution[channel.slot] != -1)
                 glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
             glActiveTexture(GL_TEXTURE0 + channel.slot);
-            glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(channel.tex.get()));
+            const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+            glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
             const GLint wrapMode = [&] {
                 switch(channel.wrapMode) {
                     case Wrap::Clamp:
@@ -288,11 +294,11 @@ public:
                 SHADERTOY_UNREACHABLE();
             }();
             if(channel.filter == Filter::Mipmap)
-                glGenerateMipmap(GL_TEXTURE_2D);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapMode);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapMode);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
+                glGenerateMipmap(type);
+            glTexParameteri(type, GL_TEXTURE_WRAP_S, wrapMode);
+            glTexParameteri(type, GL_TEXTURE_WRAP_T, wrapMode);
+            glTexParameteri(type, GL_TEXTURE_MIN_FILTER, minFilter);
+            glTexParameteri(type, GL_TEXTURE_MAG_FILTER, magFilter);
         }
 
         // update uniform
@@ -351,6 +357,42 @@ public:
 
 std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data) {
     return std::make_unique<GLTextureObject>(width, height, data);
+}
+
+class GLCubeMapObject final : public TextureObject {
+    GLuint mTex{};
+    ImVec2 mSize;
+
+public:
+    GLCubeMapObject(const uint32_t size, const uint32_t* data) : mSize{ static_cast<float>(size), static_cast<float>(size) } {
+        glGenTextures(1, &mTex);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, mTex);
+        assert(data);
+        const auto offset = static_cast<ptrdiff_t>(size) * static_cast<ptrdiff_t>(size);
+        for(int32_t idx = 0; idx < 6; ++idx) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + idx, 0, GL_RGBA, static_cast<GLsizei>(size), static_cast<GLsizei>(size),
+                         0, GL_RGBA, GL_UNSIGNED_BYTE, data + idx * offset);  // R8G8B8A8
+        }
+        glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, GL_NONE);
+    }
+    GLCubeMapObject(const GLCubeMapObject&) = delete;
+    GLCubeMapObject(GLCubeMapObject&&) = delete;
+    GLTextureObject& operator=(const GLCubeMapObject&) = delete;
+    GLCubeMapObject& operator=(GLCubeMapObject&&) = delete;
+    ~GLCubeMapObject() override {
+        glDeleteTextures(1, &mTex);
+    }
+    [[nodiscard]] TextureId getTexture() const override {
+        return mTex;
+    }
+    [[nodiscard]] ImVec2 size() const override {
+        return mSize;
+    }
+};
+
+std::unique_ptr<TextureObject> loadCubeMap(uint32_t size, const uint32_t* data) {
+    return std::make_unique<GLCubeMapObject>(size, data);
 }
 
 struct DynamicTexture final {

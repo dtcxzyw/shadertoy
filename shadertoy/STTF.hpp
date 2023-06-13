@@ -22,7 +22,7 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
-enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, LastFrame, Keyboard, Unknown };
+enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, CubeMap, LastFrame, Keyboard, Unknown };
 enum class NodeType { Image, CubeMap, Sound };
 enum class Filter { Mipmap, Linear, Nearest };
 enum class Wrap { Clamp, Repeat };
@@ -79,7 +79,8 @@ struct LastFrame final : Node {
     Node* refNode = nullptr;
     NodeType nodeType;
 
-    LastFrame(std::string refNodeNameVal, const NodeType nodeTypeVal) : refNodeName{ std::move(refNodeNameVal) }, nodeType{ nodeTypeVal } {}
+    LastFrame(std::string refNodeNameVal, const NodeType nodeTypeVal)
+        : refNodeName{ std::move(refNodeNameVal) }, nodeType{ nodeTypeVal } {}
     [[nodiscard]] NodeClass getNodeClass() const noexcept override {
         return NodeClass::LastFrame;
     }
@@ -99,6 +100,19 @@ struct Texture final : Node {
     }
     [[nodiscard]] NodeType getNodeType() const noexcept override {
         return NodeType::Image;
+    }
+};
+
+struct CubeMap final : Node {
+    uint32_t size;
+    std::vector<uint32_t> pixel;  // R8G8B8A8 * 6
+
+    CubeMap(const uint32_t x, std::vector<uint32_t> data) : size{ x }, pixel{ std::move(data) } {}
+    [[nodiscard]] NodeClass getNodeClass() const noexcept override {
+        return NodeClass::CubeMap;
+    }
+    [[nodiscard]] NodeType getNodeType() const noexcept override {
+        return NodeType::CubeMap;
     }
 };
 

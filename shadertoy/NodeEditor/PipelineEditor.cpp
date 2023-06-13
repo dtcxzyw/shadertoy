@@ -206,6 +206,11 @@ EditorTexture& PipelineEditor::spawnTexture() {
     ret->outputs.emplace_back(nextId(), "Output", NodeType::Image);
     return buildNode(mNodes, std::move(ret));
 }
+EditorCubeMap& PipelineEditor::spawnCubeMap() {
+    auto ret = std::make_unique<EditorCubeMap>(nextId(), generateUniqueName("CubeMap"));
+    ret->outputs.emplace_back(nextId(), "Output", NodeType::CubeMap);
+    return buildNode(mNodes, std::move(ret));
+}
 EditorKeyboard& PipelineEditor::spawnKeyboard() {
     auto ret = std::make_unique<EditorKeyboard>(nextId(), generateUniqueName("Keyboard"));
     ret->outputs.emplace_back(nextId(), "Output", NodeType::Image);
@@ -268,9 +273,11 @@ bool PipelineEditor::canCreateLink(const EditorPin* startPin, const EditorPin* e
     if(endPin->kind == startPin->kind) {
         return false;
     }
+    /*
     if(endPin->type != startPin->type) {
         return false;
     }
+    */
     if(endPin->node == startPin->node) {
         return false;
     }
@@ -459,10 +466,12 @@ void PipelineEditor::renderEditor() {
                     } else if(endPin->kind == startPin->kind) {
                         showLabel("x Incompatible Pin Kind", ImColor(45, 32, 32, 180));
                         ed::RejectNewItem(ImColor(255, 0, 0), 2.0f);
-                    } else if(endPin->type != startPin->type) {
+                    }
+                    /* else if(endPin->type != startPin->type) {
                         showLabel("x Incompatible Pin Type", ImColor(45, 32, 32, 180));
                         ed::RejectNewItem(ImColor(255, 128, 128), 1.0f);
-                    } else if(endPin->node == startPin->node) {
+                    }*/
+                    else if(endPin->node == startPin->node) {
                         showLabel("x Self Loop", ImColor(45, 32, 32, 180));
                         ed::RejectNewItem(ImColor(255, 128, 128), 1.0f);
                     } else if(isPinLinked(endPin->id)) {
@@ -566,6 +575,8 @@ void PipelineEditor::renderEditor() {
         ImGui::Separator();
         if(ImGui::MenuItem("Texture"))
             node = &spawnTexture();
+        if(ImGui::MenuItem("CubeMap"))
+            node = &spawnCubeMap();
         if(ImGui::MenuItem("LastFrame"))
             node = &spawnLastFrame();
         auto hasClass = [&](NodeClass nodeClass) {
@@ -609,6 +620,114 @@ void PipelineEditor::renderEditor() {
     ed::Resume();
 
     ed::End();
+}
+
+static void setupKeyboardData(uint32_t* data) {
+    // See also
+    // https://shadertoyunofficial.wordpress.com/2016/07/20/special-shadertoy-features/
+    // FIXME: remapping keys
+    constexpr std::pair<int32_t, ImGuiKey> mapping[] = {
+        { 8, ImGuiKey_Backspace },
+        { 9, ImGuiKey_Tab },
+        { 13, ImGuiKey_Enter },
+        { 16, ImGuiKey_LeftShift },
+        { 16, ImGuiKey_RightShift },
+        { 17, ImGuiKey_LeftCtrl },
+        { 17, ImGuiKey_RightCtrl },
+        { 19, ImGuiKey_Pause },
+        { 20, ImGuiKey_CapsLock },
+        { 27, ImGuiKey_Escape },
+        { 32, ImGuiKey_Space },
+        { 33, ImGuiKey_PageUp },
+        { 36, ImGuiKey_Home },
+        { 37, ImGuiKey_LeftArrow },
+        { 38, ImGuiKey_UpArrow },
+        { 39, ImGuiKey_RightArrow },
+        { 40, ImGuiKey_DownArrow },
+        { 44, ImGuiKey_PrintScreen },
+        { 45, ImGuiKey_Insert },
+        { 46, ImGuiKey_Delete },
+        { 48, ImGuiKey_0 },
+        { 49, ImGuiKey_1 },
+        { 50, ImGuiKey_2 },
+        { 51, ImGuiKey_3 },
+        { 52, ImGuiKey_4 },
+        { 53, ImGuiKey_5 },
+        { 54, ImGuiKey_6 },
+        { 55, ImGuiKey_7 },
+        { 56, ImGuiKey_8 },
+        { 57, ImGuiKey_9 },
+        { 65, ImGuiKey_A },
+        { 66, ImGuiKey_B },
+        { 67, ImGuiKey_C },
+        { 68, ImGuiKey_D },
+        { 69, ImGuiKey_E },
+        { 70, ImGuiKey_F },
+        { 71, ImGuiKey_G },
+        { 72, ImGuiKey_H },
+        { 73, ImGuiKey_I },
+        { 74, ImGuiKey_J },
+        { 75, ImGuiKey_K },
+        { 76, ImGuiKey_L },
+        { 77, ImGuiKey_M },
+        { 78, ImGuiKey_N },
+        { 79, ImGuiKey_O },
+        { 80, ImGuiKey_P },
+        { 81, ImGuiKey_Q },
+        { 82, ImGuiKey_R },
+        { 83, ImGuiKey_S },
+        { 84, ImGuiKey_T },
+        { 85, ImGuiKey_U },
+        { 86, ImGuiKey_V },
+        { 87, ImGuiKey_W },
+        { 88, ImGuiKey_X },
+        { 89, ImGuiKey_Y },
+        { 90, ImGuiKey_Z },
+        { 96, ImGuiKey_Keypad0 },
+        { 97, ImGuiKey_Keypad1 },
+        { 98, ImGuiKey_Keypad2 },
+        { 99, ImGuiKey_Keypad3 },
+        { 100, ImGuiKey_Keypad4 },
+        { 101, ImGuiKey_Keypad5 },
+        { 102, ImGuiKey_Keypad6 },
+        { 103, ImGuiKey_Keypad7 },
+        { 104, ImGuiKey_Keypad8 },
+        { 105, ImGuiKey_Keypad9 },
+        { 106, ImGuiKey_KeypadMultiply },
+        { 109, ImGuiKey_KeypadSubtract },
+        { 110, ImGuiKey_KeypadDecimal },
+        { 111, ImGuiKey_KeypadDivide },
+        { 112, ImGuiKey_F1 },
+        { 113, ImGuiKey_F2 },
+        { 114, ImGuiKey_F3 },
+        { 115, ImGuiKey_F4 },
+        { 116, ImGuiKey_F5 },
+        { 117, ImGuiKey_F6 },
+        { 118, ImGuiKey_F7 },
+        { 119, ImGuiKey_F8 },
+        { 120, ImGuiKey_F9 },
+        { 121, ImGuiKey_F10 },
+        { 122, ImGuiKey_F11 },
+        { 123, ImGuiKey_F12 },
+        { 145, ImGuiKey_ScrollLock },
+        { 144, ImGuiKey_NumLock },
+        { 187, ImGuiKey_Equal },
+        { 189, ImGuiKey_Minus },
+        { 192, ImGuiKey_GraveAccent },
+        { 219, ImGuiKey_LeftBracket },
+        { 220, ImGuiKey_Backslash },
+        { 221, ImGuiKey_RightBracket },
+    };
+    auto getKey = [&](int32_t x, int32_t y) -> uint32_t& { return data[x + y * 256]; };
+    for(auto [idx, key] : mapping) {
+        const auto down = ImGui::IsKeyDown(key);
+        const auto pressed = ImGui::IsKeyPressed(key, false);
+        constexpr uint32_t mask = 0xffffffff;
+        getKey(idx, 0) = down ? mask : 0;
+        getKey(idx, 1) = pressed ? mask : 0;
+        if(pressed)
+            getKey(idx, 2) ^= mask;
+    }
 }
 
 std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
@@ -688,14 +807,14 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
     // TODO: FB allocation
     for(auto node : order) {
         if(node->getClass() == NodeClass::GLSLShader) {
-            DoubleBufferedFB frameBuffer{ nullptr };
+            DoubleBufferedFB frameBuffer{ nullptr, false };
             if(requireDoubleBuffer.contains(node)) {
                 auto t1 = pipeline->createFrameBuffer();
                 auto t2 = pipeline->createFrameBuffer();
-                frameBuffer = DoubleBufferedFB{ t1, t2 };
+                frameBuffer = DoubleBufferedFB{ t1, t2, false };
             } else if(node != directRenderNode) {
                 auto t = pipeline->createFrameBuffer();
-                frameBuffer = DoubleBufferedFB{ t };
+                frameBuffer = DoubleBufferedFB{ t, false };
             }
             frameBufferMap.emplace(node, frameBuffer);
         }
@@ -719,13 +838,13 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                     [&] { HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to compile shader %s", node->name.c_str()); });
                 pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), target, std::move(channels));
                 if(target.t1)
-                    textureMap.emplace(node, DoubleBufferedTex{ target.t1->getTexture(), target.t2->getTexture() });
+                    textureMap.emplace(node, DoubleBufferedTex{ target.t1->getTexture(), target.t2->getTexture(), false });
                 break;
             }
             case NodeClass::LastFrame: {
                 auto target = frameBufferMap.at(dynamic_cast<EditorLastFrame*>(node)->lastFrame);
                 assert(target.t1 && target.t2);
-                textureMap.emplace(node, DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture() });
+                textureMap.emplace(node, DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(), false });
                 break;
             }
             case NodeClass::RenderOutput: {
@@ -734,118 +853,18 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
             case NodeClass::Texture: {
                 auto& textureId = dynamic_cast<EditorTexture*>(node)->textureId;
                 textureSizeMap.emplace(node, textureId->size());
-                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture() });
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), false });
+                break;
+            }
+            case NodeClass::CubeMap: {
+                auto& textureId = dynamic_cast<EditorCubeMap*>(node)->textureId;
+                textureSizeMap.emplace(node, textureId->size());
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), true });
                 break;
             }
             case NodeClass::Keyboard: {
                 textureSizeMap.emplace(node, ImVec2{ 256, 3 });
-                textureMap.emplace(node, DoubleBufferedTex{ pipeline->createDynamicTexture(256, 3, [](uint32_t* data) {
-                                       // See also
-                                       // https://shadertoyunofficial.wordpress.com/2016/07/20/special-shadertoy-features/
-                                       // FIXME: remapping keys
-                                       constexpr std::pair<int32_t, ImGuiKey> mapping[] = {
-                                           { 8, ImGuiKey_Backspace },
-                                           { 9, ImGuiKey_Tab },
-                                           { 13, ImGuiKey_Enter },
-                                           { 16, ImGuiKey_LeftShift },
-                                           { 16, ImGuiKey_RightShift },
-                                           { 17, ImGuiKey_LeftCtrl },
-                                           { 17, ImGuiKey_RightCtrl },
-                                           { 19, ImGuiKey_Pause },
-                                           { 20, ImGuiKey_CapsLock },
-                                           { 27, ImGuiKey_Escape },
-                                           { 32, ImGuiKey_Space },
-                                           { 33, ImGuiKey_PageUp },
-                                           { 36, ImGuiKey_Home },
-                                           { 37, ImGuiKey_LeftArrow },
-                                           { 38, ImGuiKey_UpArrow },
-                                           { 39, ImGuiKey_RightArrow },
-                                           { 40, ImGuiKey_DownArrow },
-                                           { 44, ImGuiKey_PrintScreen },
-                                           { 45, ImGuiKey_Insert },
-                                           { 46, ImGuiKey_Delete },
-                                           { 48, ImGuiKey_0 },
-                                           { 49, ImGuiKey_1 },
-                                           { 50, ImGuiKey_2 },
-                                           { 51, ImGuiKey_3 },
-                                           { 52, ImGuiKey_4 },
-                                           { 53, ImGuiKey_5 },
-                                           { 54, ImGuiKey_6 },
-                                           { 55, ImGuiKey_7 },
-                                           { 56, ImGuiKey_8 },
-                                           { 57, ImGuiKey_9 },
-                                           { 65, ImGuiKey_A },
-                                           { 66, ImGuiKey_B },
-                                           { 67, ImGuiKey_C },
-                                           { 68, ImGuiKey_D },
-                                           { 69, ImGuiKey_E },
-                                           { 70, ImGuiKey_F },
-                                           { 71, ImGuiKey_G },
-                                           { 72, ImGuiKey_H },
-                                           { 73, ImGuiKey_I },
-                                           { 74, ImGuiKey_J },
-                                           { 75, ImGuiKey_K },
-                                           { 76, ImGuiKey_L },
-                                           { 77, ImGuiKey_M },
-                                           { 78, ImGuiKey_N },
-                                           { 79, ImGuiKey_O },
-                                           { 80, ImGuiKey_P },
-                                           { 81, ImGuiKey_Q },
-                                           { 82, ImGuiKey_R },
-                                           { 83, ImGuiKey_S },
-                                           { 84, ImGuiKey_T },
-                                           { 85, ImGuiKey_U },
-                                           { 86, ImGuiKey_V },
-                                           { 87, ImGuiKey_W },
-                                           { 88, ImGuiKey_X },
-                                           { 89, ImGuiKey_Y },
-                                           { 90, ImGuiKey_Z },
-                                           { 96, ImGuiKey_Keypad0 },
-                                           { 97, ImGuiKey_Keypad1 },
-                                           { 98, ImGuiKey_Keypad2 },
-                                           { 99, ImGuiKey_Keypad3 },
-                                           { 100, ImGuiKey_Keypad4 },
-                                           { 101, ImGuiKey_Keypad5 },
-                                           { 102, ImGuiKey_Keypad6 },
-                                           { 103, ImGuiKey_Keypad7 },
-                                           { 104, ImGuiKey_Keypad8 },
-                                           { 105, ImGuiKey_Keypad9 },
-                                           { 106, ImGuiKey_KeypadMultiply },
-                                           { 109, ImGuiKey_KeypadSubtract },
-                                           { 110, ImGuiKey_KeypadDecimal },
-                                           { 111, ImGuiKey_KeypadDivide },
-                                           { 112, ImGuiKey_F1 },
-                                           { 113, ImGuiKey_F2 },
-                                           { 114, ImGuiKey_F3 },
-                                           { 115, ImGuiKey_F4 },
-                                           { 116, ImGuiKey_F5 },
-                                           { 117, ImGuiKey_F6 },
-                                           { 118, ImGuiKey_F7 },
-                                           { 119, ImGuiKey_F8 },
-                                           { 120, ImGuiKey_F9 },
-                                           { 121, ImGuiKey_F10 },
-                                           { 122, ImGuiKey_F11 },
-                                           { 123, ImGuiKey_F12 },
-                                           { 145, ImGuiKey_ScrollLock },
-                                           { 144, ImGuiKey_NumLock },
-                                           { 187, ImGuiKey_Equal },
-                                           { 189, ImGuiKey_Minus },
-                                           { 192, ImGuiKey_GraveAccent },
-                                           { 219, ImGuiKey_LeftBracket },
-                                           { 220, ImGuiKey_Backslash },
-                                           { 221, ImGuiKey_RightBracket },
-                                       };
-                                       auto getKey = [&](int32_t x, int32_t y) -> uint32_t& { return data[x + y * 256]; };
-                                       for(auto [idx, key] : mapping) {
-                                           const auto down = ImGui::IsKeyDown(key);
-                                           const auto pressed = ImGui::IsKeyPressed(key, false);
-                                           constexpr uint32_t mask = 0xffffffff;
-                                           getKey(idx, 0) = down ? mask : 0;
-                                           getKey(idx, 1) = pressed ? mask : 0;
-                                           if(pressed)
-                                               getKey(idx, 2) ^= mask;
-                                       }
-                                   }) });
+                textureMap.emplace(node, DoubleBufferedTex{ pipeline->createDynamicTexture(256, 3, setupKeyboardData), false });
                 break;
             }
             default:
@@ -986,24 +1005,37 @@ void EditorShader::fromSTTF(Node& node) {
     editor.setText(shader.source);
 }
 
+struct ImageStorage final {
+    uint32_t width;
+    uint32_t height;
+    std::vector<uint32_t> data;
+};
+
+static ImageStorage loadImageFromFile(const char* path) {
+    HelloImGui::Log(HelloImGui::LogLevel::Info, "Loading image %s", path);
+    stbi_set_flip_vertically_on_load(true);
+    int width, height, channels;
+    const auto ptr = stbi_load(path, &width, &height, &channels, 4);
+    if(!ptr) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to load image %s: %s", path, stbi_failure_reason());
+        return { 0, 0, {} };
+    }
+    auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
+    const auto begin = std::bit_cast<const uint32_t*>(ptr);
+    const auto end = begin + static_cast<ptrdiff_t>(width) * height;
+    return { static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::vector<uint32_t>{ begin, end } };
+}
+
 void EditorTexture::renderContent() {
     if(ImGui::Button(ICON_FA_FILE_IMAGE " Update")) {
         [&] {
             nfdchar_t* path;
             if(NFD_OpenDialog("jpg,jpeg;bmp;png;tga;tiff", nullptr, &path) == NFD_OKAY) {
-                HelloImGui::Log(HelloImGui::LogLevel::Info, "Loading image %s", path);
-                stbi_set_flip_vertically_on_load(true);
-                int width, height, channels;
-                const auto ptr = stbi_load(path, &width, &height, &channels, 4);
-                if(!ptr) {
-                    HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load image %s: %s", path, stbi_failure_reason());
+                auto [width, height, img] = loadImageFromFile(path);
+                if(img.empty())
                     return;
-                }
-                auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
-                const auto begin = std::bit_cast<const uint32_t*>(ptr);
-                const auto end = begin + static_cast<ptrdiff_t>(width) * height;
-                pixel = std::vector<uint32_t>{ begin, end };
-                textureId = loadTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height), pixel.data());
+                pixel = std::move(img);
+                textureId = loadTexture(width, height, pixel.data());
             }
         }();
     }
@@ -1029,6 +1061,48 @@ void EditorTexture::fromSTTF(Node& node) {
     const auto& texture = dynamic_cast<Texture&>(node);
     pixel = texture.pixel;
     textureId = loadTexture(texture.width, texture.height, pixel.data());
+}
+void EditorCubeMap::renderContent() {
+    if(ImGui::Button(ICON_FA_FILE_IMAGE " Update")) {
+        [&] {
+            nfdpathset_t pathSet;
+            if(NFD_OpenDialogMultiple("jpg,jpeg;bmp;png;tga;tiff", nullptr, &pathSet) == NFD_OKAY) {
+                auto guard = scopeExit([&] { NFD_PathSet_Free(&pathSet); });
+
+                if(NFD_PathSet_GetCount(&pathSet) != 6) {
+                    HelloImGui::Log(HelloImGui::LogLevel::Error, "Please choose exactly 6 images for cube map");
+                    return;
+                }
+
+                std::vector<uint32_t> tmp;
+                uint32_t size = 0;
+                for(int32_t idx = 0; idx < 6; ++idx) {
+                    auto [w, h, img] = loadImageFromFile(NFD_PathSet_GetPath(&pathSet, idx));
+                    if(img.empty())
+                        return;
+                    if(w != h)
+                        return;
+                    if(size == 0)
+                        size = w;
+                    else if(size != w)
+                        return;
+                    tmp.insert(tmp.end(), img.begin(), img.end());
+                }
+                tmp.swap(pixel);
+                textureId = loadCubeMap(size, pixel.data());
+            }
+        }();
+    }
+    // TODO: preview for cube map
+    ImGui::Text(textureId ? "Loaded" : "Unavailable");
+}
+std::unique_ptr<Node> EditorCubeMap::toSTTF() const {
+    return std::make_unique<CubeMap>(static_cast<uint32_t>(textureId->size().x), pixel);
+}
+void EditorCubeMap::fromSTTF(Node& node) {
+    const auto& texture = dynamic_cast<CubeMap&>(node);
+    pixel = texture.pixel;
+    textureId = loadCubeMap(texture.size, pixel.data());
 }
 
 // See also https://github.com/thedmd/imgui-node-editor/issues/48
@@ -1111,6 +1185,9 @@ void PipelineEditor::loadSTTF(const std::string& path) {
                 } break;
                 case NodeClass::Texture: {
                     newNode = &spawnTexture();
+                } break;
+                case NodeClass::CubeMap: {
+                    newNode = &spawnCubeMap();
                 } break;
                 case NodeClass::LastFrame: {
                     newNode = &spawnLastFrame();
@@ -1272,6 +1349,56 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         textureCache.emplace(id, &texture);
         return &texture;
     };
+    std::unordered_map<std::string, EditorCubeMap*> cubeMapCache;
+    auto getCubeMap = [&](nlohmann::json& tex) -> EditorCubeMap* {
+        const auto id = tex.at("id").get<std::string>();
+        if(const auto iter = cubeMapCache.find(id); iter != cubeMapCache.cend())
+            return iter->second;
+        auto& texture = spawnCubeMap();
+        const auto texPath = tex.at("filepath").get<std::string>();
+        std::string base, ext;
+        if(const auto pos = texPath.find_last_of('.'); pos != std::string::npos) {
+            base = texPath.substr(0, pos);
+            ext = texPath.substr(pos);
+        } else {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to parse cube map %s", texPath.c_str());
+            throw Error{};
+        }
+
+        constexpr const char* suffixes[] = { "", "_1", "_2", "_3", "_4", "_5" };
+        int32_t size = 0;
+        for(const auto suffix : suffixes) {
+            const auto facePath = base + suffix + ext;
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Downloading texture %s", facePath.c_str());
+            auto img = client.Get(facePath, headers);
+
+            stbi_set_flip_vertically_on_load(tex.at("sampler").at("vflip").get<std::string>() == "true");
+            int width, height, channels;
+            const auto ptr = stbi_load_from_memory(std::bit_cast<const stbi_uc*>(img->body.data()),
+                                                   static_cast<int>(img->body.size()), &width, &height, &channels, 4);
+            if(!ptr) {
+                HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load texture %s: %s", facePath.c_str(),
+                                stbi_failure_reason());
+                throw Error{};
+            }
+            const auto imgGuard = scopeExit([ptr] { stbi_image_free(ptr); });
+            const auto begin = std::bit_cast<const uint32_t*>(ptr);
+            const auto end = begin + static_cast<ptrdiff_t>(width) * height;
+            texture.pixel.insert(texture.pixel.end(), begin, end);
+            if(width != height) {
+                throw Error{};
+            }
+            if(size == 0)
+                size = width;
+            else if(size != width) {
+                throw Error{};
+            }
+        }
+
+        texture.textureId = loadCubeMap(static_cast<uint32_t>(size), texture.pixel.data());
+        cubeMapCache.emplace(id, &texture);
+        return &texture;
+    };
     std::string common;
     for(auto& pass : renderPasses) {
         if(pass.at("name").get<std::string>().empty()) {
@@ -1304,6 +1431,8 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                     addLink(getKeyboard(), &node, channel, &input);
                 } else if(inputType == "texture") {
                     addLink(getTexture(input), &node, channel, &input);
+                } else if(inputType == "cubemap") {
+                    addLink(getCubeMap(input), &node, channel, &input);
                 } else {
                     Log(HelloImGui::LogLevel::Error, "Unsupported input type %s", inputType.c_str());
                 }

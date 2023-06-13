@@ -30,9 +30,10 @@ using TextureId = uintptr_t;
 template <typename T>
 struct DoubleBuffered final {
     T t1, t2;
+    bool isCube;
 
-    explicit DoubleBuffered(T t) : t1{ t }, t2{ t } {}
-    explicit DoubleBuffered(T t1Val, T t2Val) : t1{ t1Val }, t2{ t2Val } {}
+    explicit DoubleBuffered(T t, bool cube) : t1{ t }, t2{ t }, isCube{ cube } {}
+    explicit DoubleBuffered(T t1Val, T t2Val, bool cube) : t1{ t1Val }, t2{ t2Val }, isCube{ cube } {}
     T get() {
         std::swap(t1, t2);
         return t1;
@@ -101,6 +102,7 @@ public:
 };
 
 std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data);
+std::unique_ptr<TextureObject> loadCubeMap(uint32_t size, const uint32_t* data);
 std::unique_ptr<Pipeline> createPipeline();
 
 SHADERTOY_NAMESPACE_END

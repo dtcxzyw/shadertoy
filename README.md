@@ -24,6 +24,8 @@ Unofficial ShaderToy live viewer
 
 [![noise-contour](https://user-images.githubusercontent.com/15650457/236791146-b3b9cdff-6754-42ae-83c3-d69ef2ea9387.png)](https://www.shadertoy.com/view/MscSzf)
 
+[![cubemaps](https://github.com/dtcxzyw/shadertoy/assets/15650457/e1719ed0-2748-47e0-a7eb-db6d35cd8dec)](https://www.shadertoy.com/view/MsXGz4)
+
 See [examples](examples) for more shaders.
 
 
@@ -42,7 +44,7 @@ Channels:
 + [ ] Music
 + [ ] Video
 + [ ] Volumes
-+ [ ] Cubemaps
++ [x] Cubemaps
 + [x] Buffer
 + [x] Keyboard
 + [ ] Webcam
