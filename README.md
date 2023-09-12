@@ -3,6 +3,7 @@
 
 [![build-windows](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-windows.yml/badge.svg)](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-windows.yml)
 [![build-linux](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-linux.yml/badge.svg)](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-linux.yml)
+[![build-macos](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-macos.yml/badge.svg)](https://github.com/dtcxzyw/shadertoy/actions/workflows/build-macos.yml)
 
 Unofficial ShaderToy live viewer
 
