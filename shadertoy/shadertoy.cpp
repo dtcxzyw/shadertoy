@@ -64,6 +64,12 @@ static void openURL(const std::string& url) {
 }
 
 static std::optional<std::function<void()>> takeScreenshot;
+static bool endsWith(const std::string_view& str, const std::string_view& pattern) {
+    return str.size() >= pattern.size() && str.substr(str.size() - pattern.size()) == pattern;
+}
+static bool startsWith(const std::string_view& str, const std::string_view& pattern) {
+    return str.size() >= pattern.size() && str.substr(0, pattern.size()) == pattern;
+}
 static void saveScreenshot(const ImVec4& bound) {
     const auto [width, height, bufferRgb] = HelloImGui::AppWindowScreenshotRgbBuffer();
     if(bufferRgb.empty()) {
@@ -100,13 +106,13 @@ static void saveScreenshot(const ImVec4& bound) {
     const std::string_view imgPath = path;
     const auto data = img.data();
     const auto stride = w * 3;
-    if(imgPath.ends_with("png")) {
+    if(endsWith(imgPath, ".png")) {
         handleStbError(stbi_write_png(path, w, h, 3, data, stride));
-    } else if(imgPath.ends_with("jpg")) {
+    } else if(endsWith(imgPath, ".jpg")) {
         handleStbError(stbi_write_jpg(path, w, h, 3, data, 90));
-    } else if(imgPath.ends_with("bmp")) {
+    } else if(endsWith(imgPath, ".bmp")) {
         handleStbError(stbi_write_bmp(path, w, h, 3, data));
-    } else if(imgPath.ends_with("tga")) {
+    } else if(endsWith(imgPath, ".tga")) {
         handleStbError(stbi_write_tga(path, w, h, 3, data));
     } else {
         HelloImGui::Log(HelloImGui::LogLevel::Error, "Unrecognized image format");
@@ -209,7 +215,7 @@ static void showImportModal() {
         ImGui::OpenPopup("Import Shader");
         if(const auto text = ImGui::GetClipboardText()) {
             const std::string_view clipboardText = text;
-            if(clipboardText.starts_with("https://www.shadertoy.com/view/")) {
+            if(startsWith(clipboardText, "https://www.shadertoy.com/view/")) {
                 url = clipboardText;
             }
         }
@@ -345,9 +351,9 @@ int shaderToyMain(int argc, char** argv) {
             reportFatalError("Failed to initialize glew");
 
         if(!initialPipeline.empty()) {
-            if(initialPipeline.starts_with("https://")) {
+            if(startsWith(initialPipeline, "https://")) {
                 PipelineEditor::get().loadFromShaderToy(initialPipeline);
-            } else if(initialPipeline.ends_with(".sttf")) {
+            } else if(endsWith(initialPipeline, ".sttf")) {
                 PipelineEditor::get().loadSTTF(initialPipeline);
             } else {
                 HelloImGui::Log(HelloImGui::LogLevel::Error, "Unrecognized filepath %s", initialPipeline.c_str());

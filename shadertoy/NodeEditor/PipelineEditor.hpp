@@ -75,14 +75,17 @@ struct EditorNode {
     virtual ~EditorNode() = default;
 
     [[nodiscard]] virtual NodeClass getClass() const noexcept = 0;
-    virtual void renderContent() {}
-    virtual std::unique_ptr<Node> toSTTF() const = 0;
+    virtual bool renderContent() {
+        return false;
+    }
+
+    [[nodiscard]] virtual std::unique_ptr<Node> toSTTF() const = 0;
     virtual void fromSTTF(Node& node) = 0;
 };
 
 struct EditorRenderOutput final : EditorNode {
     EditorRenderOutput(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    std::unique_ptr<Node> toSTTF() const override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
     [[nodiscard]] NodeClass getClass() const noexcept override {
         return NodeClass::RenderOutput;
@@ -95,8 +98,8 @@ struct EditorShader final : EditorNode {
     bool requestFocus = false;
 
     EditorShader(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    void renderContent() override;
-    std::unique_ptr<Node> toSTTF() const override;
+    bool renderContent() override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
     [[nodiscard]] NodeClass getClass() const noexcept override {
         return NodeClass::GLSLShader;
@@ -108,9 +111,9 @@ struct EditorLastFrame final : EditorNode {
     bool openPopup = false;
 
     EditorLastFrame(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    void renderContent() override;
+    bool renderContent() override;
     void renderPopup();
-    std::unique_ptr<Node> toSTTF() const override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
     [[nodiscard]] NodeClass getClass() const noexcept override {
         return NodeClass::LastFrame;
@@ -122,8 +125,8 @@ struct EditorTexture final : EditorNode {
     std::unique_ptr<TextureObject> textureId;
 
     EditorTexture(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    void renderContent() override;
-    std::unique_ptr<Node> toSTTF() const override;
+    bool renderContent() override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
 
     [[nodiscard]] NodeClass getClass() const noexcept override {
@@ -136,8 +139,8 @@ struct EditorCubeMap final : EditorNode {
     std::unique_ptr<TextureObject> textureId;
 
     EditorCubeMap(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    void renderContent() override;
-    std::unique_ptr<Node> toSTTF() const override;
+    bool renderContent() override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
 
     [[nodiscard]] NodeClass getClass() const noexcept override {
@@ -147,7 +150,7 @@ struct EditorCubeMap final : EditorNode {
 
 struct EditorKeyboard final : EditorNode {
     EditorKeyboard(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
-    std::unique_ptr<Node> toSTTF() const override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
     void fromSTTF(Node& node) override;
 
     [[nodiscard]] NodeClass getClass() const noexcept override {

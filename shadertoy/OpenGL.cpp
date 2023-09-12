@@ -101,7 +101,7 @@ constexpr uint32_t cubeMapVertexIndex[6][4] = {
     { 0, 2, 6, 4 }   // front
 };
 
-struct VertexCubeMap final {
+struct VertexCubeMap final {  // NOLINT(cppcoreguidelines-pro-type-member-init)
     ImVec2 pos;
     ImVec2 coord;
     Vec3 point;
@@ -395,6 +395,9 @@ public:
                 glActiveTexture(GL_TEXTURE0 + channel.slot);
                 const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
                 glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
+                // updating
+                if(glGetError() != GL_NO_ERROR)
+                    continue;
                 const GLint wrapMode = [&] {
                     switch(channel.wrapMode) {
                         case Wrap::Clamp:
@@ -453,8 +456,9 @@ public:
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
             if(buffer)
                 buffer->unbind();
-            glActiveTexture(GL_TEXTURE0);  // restore
         }
+
+        glActiveTexture(GL_TEXTURE0);  // restore
     }
 };
 
@@ -552,22 +556,27 @@ public:
         glGenVertexArrays(1, &mVAOImage);
         glBindVertexArray(mVAOImage);
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), std::bit_cast<void*>(offsetof(Vertex, pos)));
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, pos)));
         glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), std::bit_cast<void*>(offsetof(Vertex, coord)));
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), reinterpret_cast<void*>(offsetof(Vertex, coord)));
         glBindVertexArray(0);
 
         glGenVertexArrays(1, &mVAOCubeMap);
         glBindVertexArray(mVAOCubeMap);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
-                              std::bit_cast<void*>(offsetof(VertexCubeMap, pos)));
+                              // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                              reinterpret_cast<void*>(offsetof(VertexCubeMap, pos)));
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
-                              std::bit_cast<void*>(offsetof(VertexCubeMap, coord)));
+                              // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                              reinterpret_cast<void*>(offsetof(VertexCubeMap, coord)));
         glEnableVertexAttribArray(2);
         glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(VertexCubeMap),
-                              std::bit_cast<void*>(offsetof(VertexCubeMap, point)));
+                              // NOLINTNEXTLINE(performance-no-int-to-ptr)
+                              reinterpret_cast<void*>(offsetof(VertexCubeMap, point)));
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, GL_NONE);
     }
@@ -620,10 +629,10 @@ public:
     }
 
     TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) override {
-        mDynamicTextures.emplace_back(std::make_unique<GLTextureObject>(width, height, nullptr),
-                                      std::vector<uint32_t>(static_cast<size_t>(width) * height), std::move(update));
-        const auto& tex = mDynamicTextures.back();
-        return tex.tex->getTexture();
+        mDynamicTextures.push_back(DynamicTexture{ std::make_unique<GLTextureObject>(width, height, nullptr),
+                                                   std::vector<uint32_t>(static_cast<size_t>(width) * height),
+                                                   std::move(update) });
+        return mDynamicTextures.back().tex->getTexture();
     }
 };
 

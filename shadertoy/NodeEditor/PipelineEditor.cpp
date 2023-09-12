@@ -124,12 +124,12 @@ void PipelineEditor::resetLayout() {
     std::queue<EditorNode*> q;
     std::unordered_map<EditorNode*, uint32_t> depth;
     for(auto& node : mNodes)
-        if(!degree.contains(node.get()))
+        if(!degree.count(node.get()))
             q.push(node.get());
     while(!q.empty()) {
         auto u = q.front();
         q.pop();
-        for(auto v : graph[u] | std::views::keys) {
+        for(auto [v, idx] : graph[u]) {
             depth[v] = std::max(depth[v], depth[u] + 1);
             if(--degree[v] == 0) {
                 q.push(v);
@@ -143,7 +143,7 @@ void PipelineEditor::resetLayout() {
         layers[d].push_back(u);
 
     float selfX = 0;
-    for(auto& layer : layers | std::views::values) {
+    for(auto& [d, layer] : layers) {
         constexpr auto width = 500.0f;
         auto getBarycenter = [&](const EditorNode* u) {
             if(const auto iter = barycenter.find(u); iter != barycenter.cend()) {
@@ -151,7 +151,8 @@ void PipelineEditor::resetLayout() {
             }
             return 0.0;
         };
-        std::ranges::sort(layer, [&](const EditorNode* u, const EditorNode* v) { return getBarycenter(u) < getBarycenter(v); });
+        std::sort(layer.begin(), layer.end(),
+                  [&](const EditorNode* u, const EditorNode* v) { return getBarycenter(u) < getBarycenter(v); });
         double pos = 0;
         float selfY = 0;
         for(auto u : layer) {
@@ -174,7 +175,7 @@ void PipelineEditor::resetLayout() {
 }
 
 bool PipelineEditor::isUniqueName(const std::string_view& name, const EditorNode* exclude) const {
-    return std::ranges::all_of(mNodes, [&](auto& node) { return node.get() == exclude || node->name != name; });
+    return std::all_of(mNodes.cbegin(), mNodes.cend(), [&](auto& node) { return node.get() == exclude || node->name != name; });
 }
 std::string PipelineEditor::generateUniqueName(const std::string_view& base) const {
     if(isUniqueName(base, nullptr))
@@ -293,7 +294,7 @@ bool PipelineEditor::isPinLinked(ed::PinId id) const {
     if(!id)
         return false;
 
-    return std::ranges::any_of(mLinks, [id](auto& link) { return link.startPinId == id || link.endPinId == id; });
+    return std::any_of(mLinks.cbegin(), mLinks.cend(), [id](auto& link) { return link.startPinId == id || link.endPinId == id; });
 }
 
 EditorNode* PipelineEditor::findNode(const ed::NodeId id) const {
@@ -414,7 +415,7 @@ void PipelineEditor::renderEditor() {
                 ImGui::Spring(0);
                 ImGui::TextUnformatted(output.name.c_str());
             }
-            node->renderContent();
+            mShouldBuildPipeline |= node->renderContent();
             ImGui::Spring(0);
             drawPinIcon(output, isPinLinked(output.id), static_cast<int>(alpha * 255));
             ImGui::PopStyleVar();
@@ -512,7 +513,8 @@ void PipelineEditor::renderEditor() {
             ed::LinkId linkId = 0;
             while(ed::QueryDeletedLink(&linkId)) {
                 if(ed::AcceptDeletedItem()) {
-                    const auto id = std::ranges::find_if(mLinks, [linkId](const EditorLink& link) { return link.id == linkId; });
+                    const auto id = std::find_if(mLinks.cbegin(), mLinks.cend(),
+                                                 [linkId](const EditorLink& link) { return link.id == linkId; });
                     if(id != mLinks.end())
                         mLinks.erase(id);
                 }
@@ -521,15 +523,17 @@ void PipelineEditor::renderEditor() {
             ed::NodeId nodeId = 0;
             while(ed::QueryDeletedNode(&nodeId)) {
                 if(ed::AcceptDeletedItem()) {
-                    auto id = std::ranges::find_if(
-                        mNodes, [nodeId](const std::unique_ptr<EditorNode>& node) { return node->id == nodeId; });
+                    auto id = std::find_if(mNodes.cbegin(), mNodes.cend(),
+                                           [nodeId](const std::unique_ptr<EditorNode>& node) { return node->id == nodeId; });
 
                     if(id != mNodes.end()) {
-                        std::erase_if(mLinks, [&](auto& link) {
-                            auto u = findPin(link.startPinId);
-                            auto v = findPin(link.endPinId);
-                            return (u->node == id->get() || v->node == id->get());
-                        });
+                        mLinks.erase(std::remove_if(mLinks.begin(), mLinks.end(),
+                                                    [&](auto& link) {
+                                                        auto u = findPin(link.startPinId);
+                                                        auto v = findPin(link.endPinId);
+                                                        return (u->node == id->get() || v->node == id->get());
+                                                    }),
+                                     mLinks.end());
                         mNodes.erase(id);
                     }
                 }
@@ -582,7 +586,7 @@ void PipelineEditor::renderEditor() {
         if(ImGui::MenuItem("LastFrame"))
             node = &spawnLastFrame();
         auto hasClass = [&](NodeClass nodeClass) {
-            return std::ranges::any_of(mNodes, [&](const auto& it) { return it->getClass() == nodeClass; });
+            return std::any_of(mNodes.begin(), mNodes.end(), [&](const auto& it) { return it->getClass() == nodeClass; });
         };
         if(!hasClass(NodeClass::Keyboard) && ImGui::MenuItem("Keyboard"))
             node = &spawnKeyboard();
@@ -765,7 +769,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
         }
     }
     for(auto node : weakRef) {
-        if(!degree.contains(node))
+        if(!degree.count(node))
             q.push(node);
     }
     while(!q.empty()) {
@@ -789,7 +793,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
         throw Error{};
     }
 
-    std::ranges::reverse(order);
+    std::reverse(order.begin(), order.end());
 
     auto pipeline = createPipeline();
     std::unordered_map<EditorNode*, DoubleBufferedTex> textureMap;
@@ -811,7 +815,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
         if(node->getClass() == NodeClass::GLSLShader) {
             if(node->type == NodeType::Image) {
                 DoubleBufferedFB frameBuffer{ nullptr };
-                if(requireDoubleBuffer.contains(node)) {
+                if(requireDoubleBuffer.count(node)) {
                     auto t1 = pipeline->createFrameBuffer();
                     auto t2 = pipeline->createFrameBuffer();
                     frameBuffer = DoubleBufferedFB{ t1, t2 };
@@ -823,7 +827,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
             } else if(node->type == NodeType::CubeMap) {
                 std::vector<DoubleBufferedFB> buffers;
                 buffers.reserve(6);
-                if(requireDoubleBuffer.contains(node)) {
+                if(requireDoubleBuffer.count(node)) {
                     auto t1 = pipeline->createCubeMapFrameBuffer();
                     auto t2 = pipeline->createCubeMapFrameBuffer();
                     for(uint32_t idx = 0; idx < 6; ++idx)
@@ -843,7 +847,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
     }
 
     for(auto node : order) {
-        switch(node->getClass()) {
+        switch(node->getClass()) {  // NOLINT(clang-diagnostic-switch-enum)
             case NodeClass::GLSLShader: {
                 auto& target = frameBufferMap.at(node);
                 std::vector<Channel> channels;
@@ -852,7 +856,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                         std::optional<ImVec2> size = std::nullopt;
                         if(auto iter = textureSizeMap.find(v); iter != textureSizeMap.cend())
                             size = iter->second;
-                        channels.emplace_back(idx, textureMap.at(v), link->filter, link->wrapMode, size);
+                        channels.push_back(Channel{ idx, textureMap.at(v), link->filter, link->wrapMode, size });
                     }
                 }
                 // TODO: error markers
@@ -1017,7 +1021,7 @@ void EditorRenderOutput::fromSTTF(Node& node) {
     type = node.getNodeType();
 }
 
-void EditorShader::renderContent() {
+bool EditorShader::renderContent() {
     if(ImGui::Button(ICON_FA_EDIT " Edit")) {
         isOpen = true;
         requestFocus = true;
@@ -1025,6 +1029,7 @@ void EditorShader::renderContent() {
     if(ImGui::Button(magic_enum::enum_name(type).data())) {
         type = static_cast<NodeType>((static_cast<uint32_t>(type) + 1) % 3);
     }
+    return false;
 }
 std::unique_ptr<Node> EditorShader::toSTTF() const {
     return std::make_unique<GLSLShader>(editor.getText(), type);
@@ -1051,12 +1056,13 @@ static ImageStorage loadImageFromFile(const char* path) {
         return { 0, 0, {} };
     }
     auto guard = scopeExit([ptr] { stbi_image_free(ptr); });
-    const auto begin = std::bit_cast<const uint32_t*>(ptr);
+    const auto begin = reinterpret_cast<const uint32_t*>(ptr);
     const auto end = begin + static_cast<ptrdiff_t>(width) * height;
     return { static_cast<uint32_t>(width), static_cast<uint32_t>(height), std::vector<uint32_t>{ begin, end } };
 }
 
-void EditorTexture::renderContent() {
+bool EditorTexture::renderContent() {
+    bool updateTex = false;
     if(ImGui::Button(ICON_FA_FILE_IMAGE " Update")) {
         [&] {
             nfdchar_t* path;
@@ -1066,6 +1072,7 @@ void EditorTexture::renderContent() {
                     return;
                 pixel = std::move(img);
                 textureId = loadTexture(width, height, pixel.data());
+                updateTex = true;
             }
         }();
     }
@@ -1077,11 +1084,14 @@ void EditorTexture::renderContent() {
                 std::swap(pixel[i * width + k], pixel[j * width + k]);
         }
         textureId = loadTexture(width, height, pixel.data());
+        updateTex = true;
     }
 
     if(textureId) {
-        ImGui::Image(std::bit_cast<ImTextureID>(textureId->getTexture()), ImVec2{ 64, 64 }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        ImGui::Image(reinterpret_cast<ImTextureID>(textureId->getTexture()), ImVec2{ 64, 64 }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
     }
+    return updateTex;
 }
 std::unique_ptr<Node> EditorTexture::toSTTF() const {
     return std::make_unique<Texture>(static_cast<uint32_t>(textureId->size().x), static_cast<uint32_t>(textureId->size().y),
@@ -1092,7 +1102,8 @@ void EditorTexture::fromSTTF(Node& node) {
     pixel = texture.pixel;
     textureId = loadTexture(texture.width, texture.height, pixel.data());
 }
-void EditorCubeMap::renderContent() {
+bool EditorCubeMap::renderContent() {
+    bool updateTex = false;
     if(ImGui::Button(ICON_FA_FILE_IMAGE " Update")) {
         [&] {
             nfdpathset_t pathSet;
@@ -1120,11 +1131,14 @@ void EditorCubeMap::renderContent() {
                 }
                 tmp.swap(pixel);
                 textureId = loadCubeMap(size, pixel.data());
+                updateTex = true;
             }
         }();
     }
     // TODO: preview for cube map
     ImGui::Text(textureId ? "Loaded" : "Unavailable");
+
+    return updateTex;
 }
 std::unique_ptr<Node> EditorCubeMap::toSTTF() const {
     return std::make_unique<CubeMap>(static_cast<uint32_t>(textureId->size().x), pixel);
@@ -1136,14 +1150,15 @@ void EditorCubeMap::fromSTTF(Node& node) {
 }
 
 // See also https://github.com/thedmd/imgui-node-editor/issues/48
-void EditorLastFrame::renderContent() {
+bool EditorLastFrame::renderContent() {
     const auto& editor = PipelineEditor::get();
     auto& selectables = editor.mShaderNodes;
-    if(!std::ranges::count(selectables, lastFrame))
+    if(std::find(selectables.cbegin(), selectables.cend(), lastFrame) == selectables.cend())
         lastFrame = nullptr;
     if(ImGui::Button(lastFrame ? lastFrame->name.c_str() : "<Select One>")) {
         openPopup = true;
     }
+    return false;
 }
 void EditorLastFrame::renderPopup() {
     const auto& editor = PipelineEditor::get();
@@ -1242,10 +1257,10 @@ void PipelineEditor::loadSTTF(const std::string& path) {
             }
         }
 
-        for(auto& link : sttf.links) {
-            auto start = nodeMap.at(link.start);
-            auto end = nodeMap.at(link.end);
-            mLinks.emplace_back(nextId(), start->outputs.front().id, end->inputs[link.slot].id, link.filter, link.wrapMode);
+        for(auto& [start, end, filter, wrapMode, slot] : sttf.links) {
+            auto startNode = nodeMap.at(start);
+            auto endNode = nodeMap.at(end);
+            mLinks.emplace_back(nextId(), startNode->outputs.front().id, endNode->inputs[slot].id, filter, wrapMode);
         }
 
         HelloImGui::Log(HelloImGui::LogLevel::Info, "Success!");
@@ -1269,11 +1284,11 @@ void PipelineEditor::saveSTTF(const std::string& path) {
             sttfNode->name = node->name;
             nodeMap.emplace(node.get(), sttfNode.get());
         }
-        for(auto& link : mLinks) {
+        for(const auto& link : mLinks) {
             const auto startPin = findPin(link.startPinId);
             const auto endPin = findPin(link.endPinId);
-            auto slot = static_cast<uint32_t>(endPin - endPin->node->inputs.data());
-            sttf.links.emplace_back(nodeMap.at(startPin->node), nodeMap.at(endPin->node), link.filter, link.wrapMode, slot);
+            const auto slot = static_cast<uint32_t>(endPin - endPin->node->inputs.data());
+            sttf.links.push_back(Link{ nodeMap.at(startPin->node), nodeMap.at(endPin->node), link.filter, link.wrapMode, slot });
         }
         sttf.save(path);
         HelloImGui::Log(HelloImGui::LogLevel::Info, "Success!");
@@ -1321,8 +1336,8 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
 
     auto& sinkNode = spawnRenderOutput();
     auto addLink = [&](EditorNode* src, EditorNode* dst, uint32_t channel, nlohmann::json* ref) {
-        Filter filter = Filter::Linear;
-        Wrap wrapMode = Wrap::Repeat;
+        auto filter = Filter::Linear;
+        auto wrapMode = Wrap::Repeat;
         if(ref) {
             auto sampler = ref->at("sampler");
             const auto filterName = sampler.at("filter").get<std::string>();
@@ -1365,14 +1380,14 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
 
         stbi_set_flip_vertically_on_load(tex.at("sampler").at("vflip").get<std::string>() == "true");
         int width, height, channels;
-        const auto ptr = stbi_load_from_memory(std::bit_cast<const stbi_uc*>(img->body.data()),
+        const auto ptr = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(img->body.data()),
                                                static_cast<int>(img->body.size()), &width, &height, &channels, 4);
         if(!ptr) {
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load texture %s: %s", texPath.c_str(), stbi_failure_reason());
             throw Error{};
         }
         const auto imgGuard = scopeExit([ptr] { stbi_image_free(ptr); });
-        const auto begin = std::bit_cast<const uint32_t*>(ptr);
+        const auto begin = reinterpret_cast<const uint32_t*>(ptr);
         const auto end = begin + static_cast<ptrdiff_t>(width) * height;
         texture.pixel = std::vector<uint32_t>{ begin, end };
         texture.textureId = loadTexture(static_cast<uint32_t>(width), static_cast<uint32_t>(height), texture.pixel.data());
@@ -1399,13 +1414,15 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         constexpr const char* suffixes[] = { "", "_1", "_2", "_3", "_4", "_5" };
         int32_t size = 0;
         for(const auto suffix : suffixes) {
-            const auto facePath = base + suffix + ext;
+            auto facePath = base;
+            facePath += suffix;
+            facePath += ext;
             HelloImGui::Log(HelloImGui::LogLevel::Info, "Downloading texture %s", facePath.c_str());
             auto img = client.Get(facePath, headers);
 
             stbi_set_flip_vertically_on_load(tex.at("sampler").at("vflip").get<std::string>() == "true");
             int width, height, channels;
-            const auto ptr = stbi_load_from_memory(std::bit_cast<const stbi_uc*>(img->body.data()),
+            const auto ptr = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(img->body.data()),
                                                    static_cast<int>(img->body.size()), &width, &height, &channels, 4);
             if(!ptr) {
                 HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load texture %s: %s", facePath.c_str(),
@@ -1413,7 +1430,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 throw Error{};
             }
             const auto imgGuard = scopeExit([ptr] { stbi_image_free(ptr); });
-            const auto begin = std::bit_cast<const uint32_t*>(ptr);
+            const auto begin = reinterpret_cast<const uint32_t*>(ptr);
             const auto end = begin + static_cast<ptrdiff_t>(width) * height;
             texture.pixel.insert(texture.pixel.end(), begin, end);
             if(width != height) {
@@ -1433,7 +1450,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     std::unordered_set<std::string> passIds;
     const auto isDynamicCubeMap = [&](nlohmann::json& tex) {
         const auto id = tex.at("id").get<std::string>();
-        return passIds.contains(id);
+        return passIds.count(id) != 0;
     };
     std::string common;
     for(auto& pass : renderPasses) {
@@ -1471,8 +1488,6 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 } else if(inputType == "cubemap") {
                     if(!isDynamicCubeMap(input))
                         addLink(getCubeMap(input), &node, channel, &input);
-                    else
-                        continue;
                 } else {
                     Log(HelloImGui::LogLevel::Error, "Unsupported input type %s", inputType.c_str());
                 }
@@ -1487,7 +1502,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     }
 
     if(!common.empty()) {
-        for(auto& shader : newShaderNodes | std::views::values) {
+        for(auto& [name, shader] : newShaderNodes) {
             shader->editor.setText(common + shader->editor.getText());
         }
     }
@@ -1558,7 +1573,8 @@ void PipelineEditor::updateNodeType() {
         for(auto& node : mNodes) {
             if(node->getClass() == NodeClass::LastFrame) {
                 auto& lastFrame = dynamic_cast<EditorLastFrame&>(*node);
-                if(std::ranges::count(mShaderNodes, lastFrame.lastFrame) && lastFrame.lastFrame->type != lastFrame.type) {
+                if(std::find(mShaderNodes.cbegin(), mShaderNodes.cend(), lastFrame.lastFrame) != mShaderNodes.cend() &&
+                   lastFrame.lastFrame->type != lastFrame.type) {
                     sync(lastFrame.type, lastFrame.lastFrame->type);
                 }
             }
