@@ -109,6 +109,7 @@ struct EditorShader final : EditorNode {
 struct EditorLastFrame final : EditorNode {
     EditorNode* lastFrame = nullptr;
     bool openPopup = false;
+    bool editing = false;
 
     EditorLastFrame(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     bool renderContent() override;

@@ -1167,23 +1167,26 @@ void EditorLastFrame::renderPopup() {
 
     ed::Suspend();
     if(openPopup) {
-        ImGui::OpenPopup("popup_button");
+        ImGui::OpenPopup("##popup_button");
         openPopup = false;
+        editing = true;
     }
 
-    if(ImGui::BeginPopup("popup_button")) {
+    if(editing && ImGui::BeginPopup("##popup_button")) {
         lastFrame = nullptr;
-        ImGui::BeginChild("popup_scroller", ImVec2(100, 100), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        ImGui::BeginChild("##popup_scroller", ImVec2(100, 100), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
         for(uint32_t idx = 0; idx < names.size(); ++idx) {
             if(ImGui::Button(names[idx])) {
                 lastFrame = nodes[idx];
+                editing = false;
                 ImGui::CloseCurrentPopup();
             }
         }
 
         ImGui::EndChild();
         ImGui::EndPopup();
-    }
+    } else
+        editing = false;
     ed::Resume();
 }
 std::unique_ptr<Node> EditorLastFrame::toSTTF() const {

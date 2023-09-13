@@ -25,7 +25,7 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
-static const char* const shaderVersionDirective = "#version 450 core\n";
+static const char* const shaderVersionDirective = "#version 410 core\n";
 static const char* const shaderCubeMapDef = "#define INTERFACE_SHADERTOY_CUBE_MAP\n";
 static const char* const shaderVertexSrc = R"(
 layout (location = 0) in vec2 pos;
