@@ -33,23 +33,29 @@ if(APPLE)
 	set_target_properties(shadertoy PROPERTIES 
 		MACOSX_BUNDLE TRUE
 		MACOSX_BUNDLE_BUNDLE_NAME "Shadertoy live viewer"
-		MACOSX_BUNDLE_BUNDLE_VERSION "0.1.1"
+		MACOSX_BUNDLE_BUNDLE_VERSION ${CMAKE_PROJECT_VERSION}
+		MACOSX_BUNDLE_SHORT_VERSION_STRING ${CMAKE_PROJECT_VERSION}
 		MACOSX_BUNDLE_COPYRIGHT "Copyright 2023 Yingwei Zheng"
 		MACOSX_BUNDLE_GUI_IDENTIFIER "com.dtcxzyw.shadertoy"
+        MACOSX_FRAMEWORK_IDENTIFIER "com.dtcxzyw.shadertoy"
 	)
 endif(APPLE)
 
+set(SHADERTOY_BACKGROUND_IMG ${CMAKE_CURRENT_LIST_DIR}/thirdparty/imgui-node-editor/examples/blueprints-example/data/BlueprintBackground.png )
 add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy 
-	${CMAKE_CURRENT_LIST_DIR}/thirdparty/imgui-node-editor/examples/blueprints-example/data/BlueprintBackground.png 
+	${SHADERTOY_BACKGROUND_IMG}
 	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets/BlueprintBackground.png)
-add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy 
-	${CMAKE_SOURCE_DIR}/LICENSE
-	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/LICENSE)
-add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
-	${CMAKE_SOURCE_DIR}/licenses 
-	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/licenses)
-add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory
-	${CMAKE_SOURCE_DIR}/examples 
-	${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/examples)
 
-install(DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/ DESTINATION ${CMAKE_INSTALL_PREFIX})
+install(FILES ${SHADERTOY_BACKGROUND_IMG} DESTINATION assets)
+install(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION .)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/licenses DESTINATION .)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/examples DESTINATION .)
+install(TARGETS shadertoy DESTINATION .)
+
+# if(APPLE)
+# 	include(InstallRequiredSystemLibraries)
+# 	set(CPACK_GENERATOR "DRAGNDROP")
+#     set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/LICENSE)
+# 	set(CPACK_PACKAGE_VENDOR "Yingwei Zheng")
+# 	include(CPack)
+# endif(APPLE)

@@ -5,3 +5,7 @@ CMakeSettings.json
 .cache
 build
 out
+NodeEditor.json
+*.ini
+install
+.DS_Store
