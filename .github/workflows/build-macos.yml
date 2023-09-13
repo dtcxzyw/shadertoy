@@ -21,7 +21,7 @@ jobs:
       run: brew install ninja cmake
 
     - name: Configure CMake
-      run: cmake -G Ninja -B ${{github.workspace}}/build -DVCPKG_BUILD_TYPE=release -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64 -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+      run: cmake -G Ninja -B ${{github.workspace}}/build -DVCPKG_TARGET_TRIPLET=arm64-osx-release -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j
@@ -30,14 +30,15 @@ jobs:
       run: |
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
         rm -f ${{github.workspace}}/install/README.md
+        rm -f ${{github.workspace}}/install/shadertoy
         # Maintaining file permissions
-        chmod +x ${{github.workspace}}/install/shadertoy
-        mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-universal
-        tar -zcvf ${{github.workspace}}/shadertoy-macos-universal.tar.gz --directory ${{github.workspace}} shadertoy-macos-universal
+        chmod +x ${{github.workspace}}/install/shadertoy.app/Contents/MacOS/shadertoy
+        mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-arm64
+        tar -zcvf ${{github.workspace}}/shadertoy-macos-arm64.tar.gz --directory ${{github.workspace}} shadertoy-macos-arm64
 
     - uses: actions/upload-artifact@v3
       with:
         name: build-macos
-        path: ${{github.workspace}}/shadertoy-macos-universal.tar.gz
+        path: ${{github.workspace}}/shadertoy-macos-arm64.tar.gz
         if-no-files-found: error
       
