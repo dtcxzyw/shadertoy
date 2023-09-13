@@ -30,9 +30,8 @@ jobs:
       run: |
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
         rm -f ${{github.workspace}}/install/README.md
-        rm -f ${{github.workspace}}/install/shadertoy
         # Maintaining file permissions
-        chmod +x ${{github.workspace}}/install/shadertoy.app/Contents/MacOS/shadertoy
+        chmod +x ${{github.workspace}}/install/shadertoy
         mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-x86_64
         tar -zcvf ${{github.workspace}}/shadertoy-macos-x86_64.tar.gz --directory ${{github.workspace}} shadertoy-macos-x86_64
 
@@ -42,35 +41,34 @@ jobs:
         path: ${{github.workspace}}/shadertoy-macos-x86_64.tar.gz
         if-no-files-found: error
 
-  build_arm64:
-    runs-on: macos-13
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
+  # build_arm64:
+  #   runs-on: macos-13
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #     with:
+  #       submodules: 'recursive'
         
-    - name: Install Dependencies
-      run: brew install ninja cmake
+  #   - name: Install Dependencies
+  #     run: brew install ninja cmake
 
-    - name: Configure CMake
-      run: cmake -G Ninja -B ${{github.workspace}}/build -DVCPKG_HOST_TRIPLET=arm64-osx-release -DVCPKG_TARGET_TRIPLET=arm64-osx-release -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
+  #   - name: Configure CMake
+  #     run: cmake -G Ninja -B ${{github.workspace}}/build -DVCPKG_HOST_TRIPLET=arm64-osx-release -DVCPKG_TARGET_TRIPLET=arm64-osx-release -DCMAKE_INSTALL_PREFIX=${{github.workspace}}/install -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake
 
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j
+  #   - name: Build
+  #     run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -j
 
-    - name: Install
-      run: |
-        cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
-        rm -f ${{github.workspace}}/install/README.md
-        rm -f ${{github.workspace}}/install/shadertoy
-        # Maintaining file permissions
-        chmod +x ${{github.workspace}}/install/shadertoy.app/Contents/MacOS/shadertoy
-        mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-arm64
-        tar -zcvf ${{github.workspace}}/shadertoy-macos-arm64.tar.gz --directory ${{github.workspace}} shadertoy-macos-arm64
+  #   - name: Install
+  #     run: |
+  #       cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
+  #       rm -f ${{github.workspace}}/install/README.md
+  #       # Maintaining file permissions
+  #       chmod +x ${{github.workspace}}/install/shadertoy
+  #       mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-arm64
+  #       tar -zcvf ${{github.workspace}}/shadertoy-macos-arm64.tar.gz --directory ${{github.workspace}} shadertoy-macos-arm64
 
-    - uses: actions/upload-artifact@v3
-      with:
-        name: build-macos-arm64
-        path: ${{github.workspace}}/shadertoy-macos-arm64.tar.gz
-        if-no-files-found: error
+  #   - uses: actions/upload-artifact@v3
+  #     with:
+  #       name: build-macos-arm64
+  #       path: ${{github.workspace}}/shadertoy-macos-arm64.tar.gz
+  #       if-no-files-found: error
       

@@ -30,6 +30,13 @@ target_include_directories(shadertoy PRIVATE ${Stb_INCLUDE_DIR} ${CPP_BASE64_INC
 if(APPLE)
 	find_library(AppleSecurityLib Security)
 	target_link_libraries(shadertoy PRIVATE ${AppleSecurityLib})
+	set_target_properties(shadertoy PROPERTIES 
+		MACOSX_BUNDLE TRUE
+		MACOSX_BUNDLE_BUNDLE_NAME "Shadertoy live viewer"
+		MACOSX_BUNDLE_BUNDLE_VERSION "0.1.1"
+		MACOSX_BUNDLE_COPYRIGHT "Copyright 2023 Yingwei Zheng"
+		MACOSX_BUNDLE_GUI_IDENTIFIER "com.dtcxzyw.shadertoy"
+	)
 endif(APPLE)
 
 add_custom_command(TARGET shadertoy PRE_BUILD COMMAND ${CMAKE_COMMAND} -E copy 
