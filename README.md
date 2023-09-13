@@ -65,7 +65,7 @@ Utilities:
 Contributions are welcome!
 
 ## Releases
-See [Releases Page](https://github.com/dtcxzyw/shadertoy/releases) for pre-built binaries (windows x64/linux x86-64/macos arm64).
+See [Releases Page](https://github.com/dtcxzyw/shadertoy/releases) for pre-built binaries (windows x64/linux x86-64/macos arm64/macos x86-64).
 
 ## Build Instructions
 
