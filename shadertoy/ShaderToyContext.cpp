@@ -101,7 +101,7 @@ void ShaderToyContext::render(const ImVec2 base, const ImVec2 size, const std::o
                     return;
                 ctx->mBound = { clipMin.x, clipMin.y, clipMax.x, clipMax.y };
                 ctx->mPipeline->render(
-                    fbSize, clipMin, clipMax, ctx->mBase - drawData->DisplayPos, ctx->mSize,
+                    fbSize, clipMin, clipMax, ctx->mSize,
                     { ctx->mTime, ctx->mTimeDelta, ctx->mFrameRate, ctx->mFrameCount, ctx->mMouse, ctx->mDate });
             },
             this);

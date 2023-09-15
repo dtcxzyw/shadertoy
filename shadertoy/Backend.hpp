@@ -104,8 +104,7 @@ public:
     virtual std::vector<FrameBuffer*> createCubeMapFrameBuffer() = 0;
     virtual void addPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> target,
                          std::vector<Channel> channels) = 0;
-    virtual void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 base, ImVec2 size,
-                        const ShaderToyUniform& uniform) = 0;
+    virtual void render(ImVec2 frameBufferSize, ImVec2 clipMin, ImVec2 clipMax, ImVec2 size, const ShaderToyUniform& uniform) = 0;
     virtual TextureId createDynamicTexture(uint32_t width, uint32_t height, std::function<void(uint32_t*)> update) = 0;
 };
 

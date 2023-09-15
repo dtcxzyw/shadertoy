@@ -23,6 +23,7 @@
 #include "shadertoy/SuppressWarningPush.hpp"
 
 #include <fmt/format.h>
+#include <hello_imgui/dpi_aware.h>
 #include <hello_imgui/hello_imgui.h>
 #include <hello_imgui/image_from_asset.h>
 #include <httplib.h>
@@ -31,6 +32,8 @@
 #include <nfd.h>
 #include <nlohmann/json.hpp>
 #include <stb_image.h>
+
+using HelloImGui::EmToVec2;
 
 #include "shadertoy/SuppressWarningPop.hpp"
 
@@ -266,7 +269,7 @@ static void drawPinIcon(const EditorPin& pin, const bool connected, const int al
             break;
     }
 
-    ax::Widgets::icon(ImVec2(24, 24), iconType, connected, color, ImColor(32, 32, 32, alpha));
+    ax::Widgets::icon(EmToVec2(1, 1), iconType, connected, color, ImColor(32, 32, 32, alpha));
 }
 
 bool PipelineEditor::canCreateLink(const EditorPin* startPin, const EditorPin* endPin) const {
@@ -365,7 +368,7 @@ void PipelineEditor::renderEditor() {
         } else
             ImGui::TextUnformatted(node->name.c_str());
         ImGui::Spring(1);
-        ImGui::Dummy(ImVec2(0, 28));
+        ImGui::Dummy(EmToVec2(0, 1.5));
         ImGui::Spring(0);
         builder.endHeader();
 
@@ -555,7 +558,7 @@ void PipelineEditor::renderEditor() {
         mNewNodeLinkPin = nullptr;
     }
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, EmToVec2(0.25, 0.25));
     if(ImGui::BeginPopup("Node Context Menu")) {
         const auto node = findNode(mContextNodeId);
         if(!node->rename && ImGui::MenuItem("Rename")) {
@@ -930,9 +933,8 @@ void PipelineEditor::render(ShaderToyContext& context) {
 
             ed::SetCurrentEditor(mCtx);
             // toolbar
-            if(mShouldBuildPipeline || ImGui::Button(ICON_FA_PLAY " Build")) {
-                build(context);
-                mShouldBuildPipeline = false;
+            if(ImGui::Button(ICON_FA_PLAY " Build")) {
+                mShouldBuildPipeline = true;
             }
             ImGui::SameLine();
             if(ImGui::Button("Zoom to context")) {
@@ -1007,6 +1009,11 @@ void PipelineEditor::render(ShaderToyContext& context) {
         ImGui::EndTabBar();
     }
     ImGui::End();
+
+    if(mShouldBuildPipeline) {
+        build(context);
+        mShouldBuildPipeline = false;
+    }
 }
 
 PipelineEditor& PipelineEditor::get() {
@@ -1089,7 +1096,7 @@ bool EditorTexture::renderContent() {
 
     if(textureId) {
         // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        ImGui::Image(reinterpret_cast<ImTextureID>(textureId->getTexture()), ImVec2{ 64, 64 }, ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
+        ImGui::Image(reinterpret_cast<ImTextureID>(textureId->getTexture()), EmToVec2(3, 3), ImVec2{ 0, 1 }, ImVec2{ 1, 0 });
     }
     return updateTex;
 }
@@ -1174,7 +1181,7 @@ void EditorLastFrame::renderPopup() {
 
     if(editing && ImGui::BeginPopup("##popup_button")) {
         lastFrame = nullptr;
-        ImGui::BeginChild("##popup_scroller", ImVec2(100, 100), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        ImGui::BeginChild("##popup_scroller", EmToVec2(4, 4), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
         for(uint32_t idx = 0; idx < names.size(); ++idx) {
             if(ImGui::Button(names[idx])) {
                 lastFrame = nodes[idx];

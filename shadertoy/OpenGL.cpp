@@ -327,28 +327,33 @@ public:
     [[nodiscard]] NodeType getType() const noexcept {
         return mType;
     }
-    void render(ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, ImVec2 base, ImVec2 size,
+    void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, const ImVec2 canvasSize,
                 const ShaderToyUniform& uniform, const GLuint vao, const GLuint vbo) {
         glDisable(GL_BLEND);
         constexpr ImVec2 cubeMapSize{ static_cast<float>(cubeMapRenderTargetSize), static_cast<float>(cubeMapRenderTargetSize) };
+        const auto screenBase = clipMin;
+        const auto screenSize = ImVec2{ clipMax.x - clipMin.x, clipMax.y - clipMin.y };
 
         for(uint32_t idx = 0; idx < mBuffers.size(); ++idx) {
             const auto buffer = mBuffers[idx].get();
-
+            ImVec2 size, base, fbSize, uniformSize;
             if(buffer) {
-                if(mType == NodeType::CubeMap) {
-                    size = cubeMapSize;
-                }
+                base = { 0, 0 };
+                size = mType == NodeType::CubeMap ? cubeMapSize : screenSize;
+                fbSize = size;
+                uniformSize = mType == NodeType::CubeMap ? cubeMapSize : canvasSize;
                 glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
                 glDisable(GL_SCISSOR_TEST);
                 buffer->bind(static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y));
-                base = { 0, 0 };
-                frameBufferSize = size;
             } else {
                 glViewport(0, 0, static_cast<GLsizei>(frameBufferSize.x), static_cast<GLsizei>(frameBufferSize.y));
                 glEnable(GL_SCISSOR_TEST);
                 glScissor(static_cast<GLint>(clipMin.x), static_cast<GLint>(frameBufferSize.y - clipMax.y),
                           static_cast<GLint>(clipMax.x - clipMin.x), static_cast<GLint>(clipMax.y - clipMin.y));
+                base = screenBase;
+                size = screenSize;
+                fbSize = frameBufferSize;
+                uniformSize = canvasSize;
             }
             glUseProgram(mProgram);
             // update vertex array
@@ -362,8 +367,8 @@ public:
                     Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 } },  // right-bottom
                 };
                 for(auto& [pos, coord] : vertices) {
-                    pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
-                    pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
+                    pos.x = pos.x / fbSize.x * 2.0f - 1.0f;
+                    pos.y = 1.0f - pos.y / fbSize.y * 2.0f;
                 }
                 glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
             } else {
@@ -378,8 +383,8 @@ public:
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][3]] },  // right-bottom
                 };
                 for(auto& [pos, coord, point] : vertices) {
-                    pos.x = pos.x / frameBufferSize.x * 2.0f - 1.0f;
-                    pos.y = 1.0f - pos.y / frameBufferSize.y * 2.0f;
+                    pos.x = pos.x / fbSize.x * 2.0f - 1.0f;
+                    pos.y = 1.0f - pos.y / fbSize.y * 2.0f;
                 }
                 glBufferData(GL_ARRAY_BUFFER, 4 * sizeof(VertexCubeMap), vertices.data(), GL_STREAM_DRAW);
             }
@@ -439,7 +444,7 @@ public:
 
             // update uniform
             if(mLocationResolution != -1)
-                glUniform3f(mLocationResolution, size.x, size.y, 0.0f);
+                glUniform3f(mLocationResolution, uniformSize.x, uniformSize.y, 0.0f);
             if(mLocationTime != -1)
                 glUniform1f(mLocationTime, uniform.time);
             if(mLocationTimeDelta != -1)
@@ -613,7 +618,7 @@ public:
         mRenderPasses.push_back(std::make_unique<RenderPass>(src, type, std::move(target), std::move(channels)));
     }
 
-    void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, const ImVec2 base, const ImVec2 size,
+    void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, ImVec2 size,
                 const ShaderToyUniform& uniform) override {
         for(auto& [tex, data, update] : mDynamicTextures) {
             update(data.data());
@@ -624,7 +629,7 @@ public:
             glBindTexture(GL_TEXTURE_2D, GL_NONE);
         }
         for(const auto& pass : mRenderPasses)
-            pass->render(frameBufferSize, clipMin, clipMax, base, size, uniform,
+            pass->render(frameBufferSize, clipMin, clipMax, size, uniform,
                          pass->getType() == NodeType::Image ? mVAOImage : mVAOCubeMap, mVBO);
     }
 

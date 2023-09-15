@@ -20,6 +20,7 @@
 #include "shadertoy/SuppressWarningPush.hpp"
 
 #include <fmt/format.h>
+#include <hello_imgui/dpi_aware.h>
 #include <hello_imgui/hello_imgui.h>
 #include <hello_imgui/hello_imgui_screenshot.h>
 #include <httplib.h>
@@ -39,6 +40,8 @@
 #define NOMINMAX  // NOLINT(clang-diagnostic-unused-macros)
 #include <Windows.h>
 #endif
+
+using HelloImGui::EmToVec2;
 
 #include "shadertoy/SuppressWarningPop.hpp"
 
@@ -230,7 +233,7 @@ static void showImportModal() {
         ImGui::SetNextItemWidth(ImGui::CalcTextSize("https://www.shadertoy.com/view/WWWWWWXXXX").x);
         ImGui::InputText("##Url", &url, ImGuiInputTextFlags_CharsNoBlank);
 
-        if(ImGui::Button("Import", ImVec2(120, 0))) {
+        if(ImGui::Button("Import", EmToVec2(5, 0))) {
             try {
                 PipelineEditor::get().loadFromShaderToy(url);
             } catch(const Error&) {
@@ -240,7 +243,7 @@ static void showImportModal() {
         }
         ImGui::SetItemDefaultFocus();
         ImGui::SameLine();
-        if(ImGui::Button("Cancel", ImVec2(120, 0))) {
+        if(ImGui::Button("Cancel", EmToVec2(5, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -286,7 +289,7 @@ static void showAboutModal() {
             ImGui::TextUnformatted(OpenSSL_version(OPENSSL_VERSION));
         }
 
-        if(ImGui::Button("Close", ImVec2(120, 0))) {
+        if(ImGui::Button("Close", EmToVec2(5, 0))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SetItemDefaultFocus();
@@ -347,9 +350,6 @@ int shaderToyMain(int argc, char** argv) {
     canvasWindow.label = "Canvas";
     canvasWindow.dockSpaceName = "LeftSpace";
     canvasWindow.GuiFunction = [&] {
-        if(!__glewCreateProgram && glewInit() != GLEW_OK)
-            reportFatalError("Failed to initialize glew");
-
         if(!initialPipeline.empty()) {
             if(startsWith(initialPipeline, "https://")) {
                 PipelineEditor::get().loadFromShaderToy(initialPipeline);
@@ -375,6 +375,11 @@ int shaderToyMain(int argc, char** argv) {
     editorWindow.GuiFunction = [&] { PipelineEditor::get().render(ctx); };
     runnerParams.dockingParams.dockableWindows = { canvasWindow, outputWindow, editorWindow };
 
+    // 8x MSAA
+    runnerParams.callbacks.PostInit = [] {
+        if(glewInit() != GLEW_OK)
+            reportFatalError("Failed to initialize glew");
+    };
     HelloImGui::Run(runnerParams);
     return 0;
 }

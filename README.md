@@ -61,6 +61,7 @@ Utilities:
 + [ ] Video recording
 + [ ] Custom uniforms
 + [ ] Custom meshes
++ [ ] Anti aliasing
 
 Contributions are welcome!
 
