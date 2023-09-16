@@ -31,7 +31,7 @@ jobs:
         cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} -t install
         rm -f ${{github.workspace}}/install/README.md
         # Maintaining file permissions
-        chmod +x ${{github.workspace}}/install/shadertoy.app/Contents/MacOS/shadertoy
+        # chmod +x ${{github.workspace}}/install/shadertoy.app/Contents/MacOS/shadertoy
         mv ${{github.workspace}}/install ${{github.workspace}}/shadertoy-macos-x86_64
         tar -zcvf ${{github.workspace}}/shadertoy-macos-x86_64.tar.gz --directory ${{github.workspace}} shadertoy-macos-x86_64
 

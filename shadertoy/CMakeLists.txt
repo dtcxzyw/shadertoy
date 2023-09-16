@@ -30,15 +30,15 @@ target_include_directories(shadertoy PRIVATE ${Stb_INCLUDE_DIR} ${CPP_BASE64_INC
 if(APPLE)
 	find_library(AppleSecurityLib Security)
 	target_link_libraries(shadertoy PRIVATE ${AppleSecurityLib})
-	set_target_properties(shadertoy PROPERTIES 
-		MACOSX_BUNDLE TRUE
-		MACOSX_BUNDLE_BUNDLE_NAME "Shadertoy live viewer"
-		MACOSX_BUNDLE_BUNDLE_VERSION ${CMAKE_PROJECT_VERSION}
-		MACOSX_BUNDLE_SHORT_VERSION_STRING ${CMAKE_PROJECT_VERSION}
-		MACOSX_BUNDLE_COPYRIGHT "Copyright 2023 Yingwei Zheng"
-		MACOSX_BUNDLE_GUI_IDENTIFIER "com.dtcxzyw.shadertoy"
-        MACOSX_FRAMEWORK_IDENTIFIER "com.dtcxzyw.shadertoy"
-	)
+#   set_target_properties(shadertoy PROPERTIES 
+#	    MACOSX_BUNDLE TRUE
+#		MACOSX_BUNDLE_BUNDLE_NAME "Shadertoy live viewer"
+#		MACOSX_BUNDLE_BUNDLE_VERSION ${CMAKE_PROJECT_VERSION}
+#		MACOSX_BUNDLE_SHORT_VERSION_STRING ${CMAKE_PROJECT_VERSION}
+#		MACOSX_BUNDLE_COPYRIGHT "Copyright 2023 Yingwei Zheng"
+#		MACOSX_BUNDLE_GUI_IDENTIFIER "com.dtcxzyw.shadertoy"
+#       MACOSX_FRAMEWORK_IDENTIFIER "com.dtcxzyw.shadertoy"
+#	)
 endif(APPLE)
 
 set(SHADERTOY_BACKGROUND_IMG ${CMAKE_CURRENT_LIST_DIR}/thirdparty/imgui-node-editor/examples/blueprints-example/data/BlueprintBackground.png )

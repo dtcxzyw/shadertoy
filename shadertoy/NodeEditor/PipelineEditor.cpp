@@ -1592,7 +1592,7 @@ void PipelineEditor::updateNodeType() {
 
         std::unordered_map<uintptr_t, ed::PinId> graph;
         for(auto link : mLinks) {
-            assert(!graph.contains(link.endPinId.Get()));
+            assert(!graph.count(link.endPinId.Get()));
             graph.emplace(link.endPinId.Get(), link.startPinId);
         }
         for(const auto& node : mNodes) {

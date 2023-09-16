@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 SET(CMAKE_FIND_PACKAGE_SORT_ORDER NATURAL)
 SET(CMAKE_FIND_PACKAGE_SORT_DIRECTION DEC)
 
-project(shadertoy VERSION 0.1.1 HOMEPAGE_URL "https://github.com/dtcxzyw/shadertoy")
+project(shadertoy VERSION 0.1.2 HOMEPAGE_URL "https://github.com/dtcxzyw/shadertoy")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Supported build types: Debug Release" FORCE)

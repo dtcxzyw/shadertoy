@@ -362,9 +362,9 @@ public:
             if(mType == NodeType::Image) {
                 std::array vertices{
                     Vertex{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 } },              // left-bottom
-                    Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, size.y } },                    // left-top
-                    Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ size.x, size.y } },        // right-top
-                    Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 } },  // right-bottom
+                    Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, uniformSize.y } },                    // left-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ uniformSize.x, uniformSize.y } },        // right-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ uniformSize.x, 0.0 } },  // right-bottom
                 };
                 for(auto& [pos, coord] : vertices) {
                     pos.x = pos.x / fbSize.x * 2.0f - 1.0f;
@@ -375,11 +375,11 @@ public:
                 std::array vertices{
                     VertexCubeMap{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 },
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][0]] },  // left-bottom
-                    VertexCubeMap{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, size.y },
+                    VertexCubeMap{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, uniformSize.y },
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][1]] },  // left-top
-                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y }, ImVec2{ size.x, size.y },
+                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y }, ImVec2{ uniformSize.x, uniformSize.y },
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][2]] },  // right-top
-                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ size.x, 0.0 },
+                    VertexCubeMap{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ uniformSize.x, 0.0 },
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][3]] },  // right-bottom
                 };
                 for(auto& [pos, coord, point] : vertices) {
