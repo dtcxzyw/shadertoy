@@ -1,6 +1,6 @@
 /*
     SPDX-License-Identifier: Apache-2.0
-    Copyright 2023 Yingwei Zheng
+    Copyright 2023-2025 Yingwei Zheng
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
@@ -260,7 +260,7 @@ static void showAboutModal() {
     if(ImGui::BeginPopupModal("About Shadertoy live viewer", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextUnformatted("Unofficial Shadertoy live viewer " SHADERTOY_VERSION);
         ImGui::Separator();
-        ImGui::TextUnformatted("Copyright 2023 Yingwei Zheng");
+        ImGui::TextUnformatted("Copyright 2023-2025 Yingwei Zheng");
         ImGui::TextUnformatted("Licensed under the Apache License, Version 2.0");
         ImGui::TextUnformatted("Build Time: " __DATE__ " " __TIME__);
 
