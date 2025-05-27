@@ -24,6 +24,7 @@ class ShaderToyContext final {
     SystemClock::time_point mStartTime;
     SystemClock::time_point mPauseTime;
     float mTime{};
+    float mTimeScale{};
     float mTimeDelta{};
     int32_t mFrameCount{};
     float mFrameRate{};
@@ -61,6 +62,9 @@ public:
     }
     [[nodiscard]] ImVec4 getBound() const noexcept {
         return mBound;
+    }
+    float& getTimeScale() noexcept {
+        return mTimeScale;
     }
     [[nodiscard]] bool isValid() const noexcept {
         return static_cast<bool>(mPipeline);

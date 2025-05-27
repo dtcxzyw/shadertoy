@@ -172,6 +172,8 @@ static void showCanvas(ShaderToyContext& ctx) {
     if(ImGui::Button(ICON_FA_CAMERA)) {
         takeScreenshot = [&ctx] { saveScreenshot(ctx.getBound()); };
     }
+    ImGui::SameLine();
+    ImGui::DragFloat("timescale (log2)", &ctx.getTimeScale(), 0.01f, -16.0f, 16.0f, "%.1f");
     ImGui::End();
 }
 

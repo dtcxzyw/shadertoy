@@ -35,8 +35,9 @@ void ShaderToyContext::tick() {
     const auto now = SystemClock::now();
     const auto time = static_cast<float>(
         static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - mStartTime).count()) * 1e-9);
-    mTimeDelta = time - mTime;
-    mTime = time;
+    const auto timeScale = std::exp2(mTimeScale);
+    mTimeDelta = (time - mTime) * timeScale;
+    mTime = time * timeScale;
     ++mFrameCount;
     mFrameRate = ImGui::GetIO().Framerate;
 
@@ -63,7 +64,7 @@ void ShaderToyContext::resume() {
 }
 void ShaderToyContext::reset() {
     mStartTime = SystemClock::now();
-    mTime = mTimeDelta = 0.0f;
+    mTime = mTimeDelta = mTimeScale = 0.0f;
     mFrameCount = 0;
 }
 void ShaderToyContext::render(const ImVec2 base, const ImVec2 size, const std::optional<ImVec4>& mouse) {
