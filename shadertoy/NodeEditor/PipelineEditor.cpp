@@ -1329,8 +1329,16 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
     headers.emplace("referer", url);
     auto res = client.Post("/shadertoy", headers, std::string(R"(s={"shaders":[")") + shaderId.data() + "\"]}&nt=1&nl=1&np=1",
                            "application/x-www-form-urlencoded");
-
+    int status = res.value().status;
+    if(status != 200) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Invalid response from shadertoy.com (Status code = %d).", status);
+        throw Error{};
+    }
     auto json = nlohmann::json::parse(res->body);
+    if(!json.is_object()) {
+        HelloImGui::Log(HelloImGui::LogLevel::Error, "Invalid response from shadertoy.com");
+        throw Error{};
+    }
     auto metadata = json[0].at("info");
 
     mMetadata.emplace_back("Name", metadata.at("name").get<std::string>());

@@ -236,7 +236,7 @@ static void showImportModal() {
         if(ImGui::Button("Import", EmToVec2(5, 0))) {
             try {
                 PipelineEditor::get().loadFromShaderToy(url);
-            } catch(const Error&) {
+            } catch(const std::exception&) {
                 Log(HelloImGui::LogLevel::Error, "Failed to import %s", url.c_str());
             }
             ImGui::CloseCurrentPopup();
