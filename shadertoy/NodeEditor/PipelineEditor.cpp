@@ -1335,7 +1335,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         throw Error{};
     }
     auto json = nlohmann::json::parse(res->body);
-    if(!json.is_object()) {
+    if(!json.is_array()) {
         HelloImGui::Log(HelloImGui::LogLevel::Error, "Invalid response from shadertoy.com");
         throw Error{};
     }
