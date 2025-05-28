@@ -173,6 +173,7 @@ static void showCanvas(ShaderToyContext& ctx) {
         takeScreenshot = [&ctx] { saveScreenshot(ctx.getBound()); };
     }
     ImGui::SameLine();
+    ImGui::SetNextItemWidth(100.0f);
     ImGui::DragFloat("timescale (log2)", &ctx.getTimeScale(), 0.01f, -16.0f, 16.0f, "%.1f");
     ImGui::End();
 }
