@@ -361,10 +361,10 @@ public:
             glBindVertexArray(vao);
             if(mType == NodeType::Image) {
                 std::array vertices{
-                    Vertex{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 } },              // left-bottom
-                    Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, uniformSize.y } },                    // left-top
-                    Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ uniformSize.x, uniformSize.y } },        // right-top
-                    Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ uniformSize.x, 0.0 } },  // right-bottom
+                    Vertex{ ImVec2{ base.x, base.y + size.y }, ImVec2{ 0.0, 0.0 } },                      // left-bottom
+                    Vertex{ ImVec2{ base.x, base.y }, ImVec2{ 0.0, uniformSize.y } },                     // left-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y }, ImVec2{ uniformSize.x, uniformSize.y } },  // right-top
+                    Vertex{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ uniformSize.x, 0.0 } },   // right-bottom
                 };
                 for(auto& [pos, coord] : vertices) {
                     pos.x = pos.x / fbSize.x * 2.0f - 1.0f;
@@ -391,12 +391,15 @@ public:
 
             // update texture
             for(auto& channel : mChannels) {
+                if(mLocationChannelResolution[channel.slot] == -1)
+                    continue;
+                const auto texSize = channel.size.value_or(channel.tex.isCube ? cubeMapSize : size);
+                glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
+            }
+            for(auto& channel : mChannels) {
                 if(mLocationChannel[channel.slot] == -1)
                     continue;
                 glUniform1i(mLocationChannel[channel.slot], static_cast<GLint>(channel.slot));
-                const auto texSize = channel.size.value_or(channel.tex.isCube ? cubeMapSize : size);
-                if(mLocationChannelResolution[channel.slot] != -1)
-                    glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
                 glActiveTexture(GL_TEXTURE0 + channel.slot);
                 const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
                 glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
