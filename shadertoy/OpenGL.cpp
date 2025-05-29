@@ -268,6 +268,7 @@ public:
             pixelSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
             pixelSrc += ";\n";
         }
+        pixelSrc += "#line 1\n";
         pixelSrc += src;
         pixelSrc += shaderPixelFooter;
 
