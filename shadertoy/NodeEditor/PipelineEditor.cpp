@@ -865,7 +865,8 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 // TODO: error markers
                 auto guard = scopeFail(
                     [&] { HelloImGui::Log(HelloImGui::LogLevel::Error, "Failed to compile shader %s", node->name.c_str()); });
-                pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), node->type, target, std::move(channels));
+                pipeline->addPass(dynamic_cast<EditorShader*>(node)->editor.getText(), node->type, target, std::move(channels),
+                                  node == sinkNode);
                 if(target.front().t1)
                     textureMap.emplace(node,
                                        DoubleBufferedTex{ target.front().t1->getTexture(), target.front().t2->getTexture(),

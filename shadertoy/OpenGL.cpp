@@ -70,13 +70,20 @@ uniform vec3 iChannelResolution[4];
 
 static const char* const shaderPixelFooter = R"(
 void main() {
-    vec4 output_color = vec4(0.0f);
+#ifdef SHADERTOY_CLAMP_OUTPUT
+    out_frag_color = vec4(0.0f, 0.0f, 0.0f, 1.0f);
+#endif
+    vec4 output_color = vec4(1e20f);
 #ifndef INTERFACE_SHADERTOY_CUBE_MAP
     mainImage(output_color, f_fragCoord);
 #else
     mainCubemap(output_color, f_fragCoord, vec3(0.0), normalize(f_point));
 #endif
+#ifdef SHADERTOY_CLAMP_OUTPUT
+    out_frag_color = vec4(clamp(output_color.xyz, vec3(0.0f), vec3(1.0f)), 1.0f);
+#else
     out_frag_color = output_color;
+#endif
 }
 )";
 
@@ -251,7 +258,8 @@ class RenderPass final {
     std::vector<Channel> mChannels;
 
 public:
-    RenderPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> buffer, std::vector<Channel> channels)
+    RenderPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> buffer, std::vector<Channel> channels,
+               bool clampOutput)
         : mBuffers{ std::move(buffer) }, mType{ type }, mChannels{ std::move(channels) } {
         std::string vertexSrc = shaderVersionDirective;
         std::string pixelSrc = shaderVersionDirective;
@@ -268,6 +276,8 @@ public:
             pixelSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
             pixelSrc += ";\n";
         }
+        if(clampOutput)
+            pixelSrc += "#define SHADERTOY_CLAMP_OUTPUT\n";
         pixelSrc += "#line 1\n";
         pixelSrc += src;
         pixelSrc += shaderPixelFooter;
@@ -617,9 +627,9 @@ public:
         return buffers;
     }
 
-    void addPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> target,
-                 std::vector<Channel> channels) override {
-        mRenderPasses.push_back(std::make_unique<RenderPass>(src, type, std::move(target), std::move(channels)));
+    void addPass(const std::string& src, NodeType type, std::vector<DoubleBufferedFB> target, std::vector<Channel> channels,
+                 bool clampOutput) override {
+        mRenderPasses.push_back(std::make_unique<RenderPass>(src, type, std::move(target), std::move(channels), clampOutput));
     }
 
     void render(const ImVec2 frameBufferSize, const ImVec2 clipMin, const ImVec2 clipMax, ImVec2 size,
