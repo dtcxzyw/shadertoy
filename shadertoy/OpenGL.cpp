@@ -40,7 +40,7 @@ layout (location = 1) out vec3 f_point;
 #endif
 
 void main() {
-    gl_Position = vec4(pos, 1.0f, 1.0f);
+    gl_Position = vec4(pos, 0.0f, 1.0f);
     f_fragCoord = texCoord;
 #ifdef INTERFACE_SHADERTOY_CUBE_MAP
     f_point = point;
