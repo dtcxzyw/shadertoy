@@ -41,11 +41,14 @@ void ShaderToyContext::tick() {
     ++mFrameCount;
     mFrameRate = ImGui::GetIO().Framerate;
 
-    const auto current = SystemClock::to_time_t(now);
+    const auto offsetNow = mStartTime +
+        std::chrono::duration_cast<SystemClock::duration>(
+                               std::chrono::nanoseconds{ static_cast<std::chrono::nanoseconds::rep>(mTime * 1e9) });
+    const auto current = SystemClock::to_time_t(offsetNow);
     const auto tm = std::localtime(&current);  // NOLINT(concurrency-mt-unsafe)
     mDate = { static_cast<float>(tm->tm_year + 1900 - 1), static_cast<float>(tm->tm_mon), static_cast<float>(tm->tm_mday),
               static_cast<float>(tm->tm_hour * 3600 + tm->tm_min * 60 + tm->tm_sec) +
-                  static_cast<float>(now.time_since_epoch().count() % SystemClock::period::den) /
+                  static_cast<float>(offsetNow.time_since_epoch().count() % SystemClock::period::den) /
                       static_cast<float>(SystemClock::period::den) };
 }
 void ShaderToyContext::pause() {

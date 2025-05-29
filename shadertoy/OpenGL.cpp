@@ -66,6 +66,7 @@ uniform vec4      iMouse;                // mouse pixel coords. xy: current (if 
 uniform vec4      iDate;                 // Year, month, day, time in seconds in .xyzw
 uniform vec3 iChannelResolution[4];
 
+#define char char_
 )";
 
 static const char* const shaderPixelFooter = R"(
