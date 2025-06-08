@@ -74,6 +74,16 @@ void ShaderToyTransmissionFormat::load(const std::string& filePath) {
                     nodeVal = std::make_unique<CubeMap>(size, std::vector<uint32_t>{ begin, end });
                     break;
                 }
+                case NodeClass::Volume: {
+                    const auto size = node.at("size").get<uint32_t>();
+                    const auto channels = node.at("channels").get<uint32_t>();
+                    const auto base64Data = node.at("data").get<std::string>();
+                    const auto decodedData = base64_decode(base64Data);
+                    const auto begin = reinterpret_cast<const uint8_t*>(decodedData.data());
+                    const auto end = begin + static_cast<ptrdiff_t>(size) * size * size * channels;
+                    nodeVal = std::make_unique<Volume>(size, channels, std::vector<uint8_t>{ begin, end });
+                    break;
+                }
                 case NodeClass::LastFrame: {
                     nodeVal =
                         std::make_unique<LastFrame>(node.at("ref").get<std::string>(),
@@ -158,6 +168,14 @@ void ShaderToyTransmissionFormat::save(const std::string& filePath) const {
                     const auto bytes = gsl::as_bytes(gsl::span<const uint32_t>{ texture.pixel.data(), texture.pixel.size() });
                     jsonNode["data"] = base64_encode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
                     jsonNode["size"] = texture.size;
+                    break;
+                }
+                case NodeClass::Volume: {
+                    const auto& texture = dynamic_cast<Volume&>(*node);
+                    const auto bytes = gsl::as_bytes(gsl::span<const uint8_t>{ texture.pixel.data(), texture.pixel.size() });
+                    jsonNode["data"] = base64_encode(reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
+                    jsonNode["size"] = texture.size;
+                    jsonNode["channels"] = texture.channels;
                     break;
                 }
                 case NodeClass::LastFrame: {

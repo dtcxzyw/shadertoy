@@ -149,6 +149,20 @@ struct EditorCubeMap final : EditorNode {
     }
 };
 
+struct EditorVolume final : EditorNode {
+    std::vector<uint8_t> pixel;
+    std::unique_ptr<TextureObject> textureId;
+
+    EditorVolume(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
+    bool renderContent() override;
+    [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
+    void fromSTTF(Node& node) override;
+
+    [[nodiscard]] NodeClass getClass() const noexcept override {
+        return NodeClass::Volume;
+    }
+};
+
 struct EditorKeyboard final : EditorNode {
     EditorKeyboard(const uint32_t idVal, std::string nameVal) : EditorNode(idVal, std::move(nameVal)) {}
     [[nodiscard]] std::unique_ptr<Node> toSTTF() const override;
@@ -204,6 +218,7 @@ class PipelineEditor final {
     void renderEditor();
     void resetLayout();
     EditorCubeMap& spawnCubeMap();
+    EditorVolume& spawnVolume();
     EditorTexture& spawnTexture();
     EditorRenderOutput& spawnRenderOutput();
     EditorLastFrame& spawnLastFrame();

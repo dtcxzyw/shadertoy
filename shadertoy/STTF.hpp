@@ -22,8 +22,8 @@
 
 SHADERTOY_NAMESPACE_BEGIN
 
-enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, CubeMap, LastFrame, Keyboard, Unknown };
-enum class NodeType { Image, CubeMap, Sound };
+enum class NodeClass { RenderOutput, SoundOutput, GLSLShader, Texture, CubeMap, LastFrame, Keyboard, Volume, Unknown };
+enum class NodeType { Image, CubeMap, Volume, Sound };
 enum class Filter { Mipmap, Linear, Nearest };
 enum class Wrap { Clamp, Repeat };
 
@@ -113,6 +113,21 @@ struct CubeMap final : Node {
     }
     [[nodiscard]] NodeType getNodeType() const noexcept override {
         return NodeType::CubeMap;
+    }
+};
+
+struct Volume final : Node {
+    uint32_t size;
+    uint32_t channels;
+    std::vector<uint8_t> pixel;  // R8G8B8A8 * 6
+
+    Volume(uint32_t x, uint32_t channels, std::vector<uint8_t> data)
+        : size{ x }, channels{ channels }, pixel{ std::move(data) } {}
+    [[nodiscard]] NodeClass getNodeClass() const noexcept override {
+        return NodeClass::Volume;
+    }
+    [[nodiscard]] NodeType getNodeType() const noexcept override {
+        return NodeType::Volume;
     }
 };
 

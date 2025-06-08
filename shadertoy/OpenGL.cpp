@@ -272,7 +272,7 @@ public:
         pixelSrc += shaderPixelHeader;
         for(auto& channel : mChannels) {
             pixelSrc += "uniform sampler";
-            pixelSrc += channel.tex.isCube ? "Cube" : "2D";
+            pixelSrc += channel.tex.type == TexType::CubeMap ? "Cube" : channel.tex.type == TexType::Tex2D ? "2D" : "3D";
             pixelSrc += " iChannel";
             pixelSrc += static_cast<char>(static_cast<uint32_t>('0') + channel.slot);
             pixelSrc += ";\n";
@@ -405,15 +405,22 @@ public:
             for(auto& channel : mChannels) {
                 if(mLocationChannelResolution[channel.slot] == -1)
                     continue;
-                const auto texSize = channel.size.value_or(channel.tex.isCube ? cubeMapSize : size);
-                glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
+                if(channel.tex.type != TexType::Tex3D) {
+                    const auto texSize = channel.size.value_or(channel.tex.type == TexType::CubeMap ? cubeMapSize : size);
+                    glUniform3f(mLocationChannelResolution[channel.slot], texSize.x, texSize.y, 1.0f);
+                } else {
+                    const auto x = channel.size->x;
+                    glUniform3f(mLocationChannelResolution[channel.slot], x, x, x);
+                }
             }
             for(auto& channel : mChannels) {
                 if(mLocationChannel[channel.slot] == -1)
                     continue;
                 glUniform1i(mLocationChannel[channel.slot], static_cast<GLint>(channel.slot));
                 glActiveTexture(GL_TEXTURE0 + channel.slot);
-                const auto type = channel.tex.isCube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D;
+                const auto type = channel.tex.type == TexType::CubeMap ? GL_TEXTURE_CUBE_MAP :
+                    channel.tex.type == TexType::Tex2D                 ? GL_TEXTURE_2D :
+                                                                         GL_TEXTURE_3D;
                 glBindTexture(type, static_cast<GLuint>(channel.tex.get()));
                 // updating
                 if(glGetError() != GL_NO_ERROR)
@@ -451,6 +458,9 @@ public:
                 }();
                 if(channel.filter == Filter::Mipmap)
                     glGenerateMipmap(type);
+                if(channel.tex.type == TexType::Tex3D)
+                    glTexParameteri(type, GL_TEXTURE_WRAP_R, wrapMode);
+
                 glTexParameteri(type, GL_TEXTURE_WRAP_S, wrapMode);
                 glTexParameteri(type, GL_TEXTURE_WRAP_T, wrapMode);
                 glTexParameteri(type, GL_TEXTURE_MIN_FILTER, minFilter);
@@ -551,6 +561,43 @@ public:
 
 std::unique_ptr<TextureObject> loadCubeMap(uint32_t size, const uint32_t* data) {
     return std::make_unique<GLCubeMapObject>(size, data);
+}
+
+class GLVolumeObject final : public TextureObject {
+    GLuint mTex{};
+    ImVec2 mSize;
+
+public:
+    GLVolumeObject(uint32_t size, uint32_t channels, const uint8_t* data)
+        : mSize{ static_cast<float>(size), static_cast<float>(size) } {
+        glGenTextures(1, &mTex);
+        glBindTexture(GL_TEXTURE_3D, mTex);
+        assert(data);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(std::log2(size)));
+        GLenum format = channels == 1 ? GL_R8 : GL_RGBA;
+        glTexImage3D(GL_TEXTURE_3D, 0, format, static_cast<GLsizei>(size), static_cast<GLsizei>(size), static_cast<GLsizei>(size),
+                     0, format, GL_UNSIGNED_BYTE, data);  // R8G8B8A8
+        glGenerateMipmap(GL_TEXTURE_3D);
+        glBindTexture(GL_TEXTURE_3D, GL_NONE);
+    }
+    GLVolumeObject(const GLVolumeObject&) = delete;
+    GLVolumeObject(GLVolumeObject&&) = delete;
+    GLVolumeObject& operator=(const GLVolumeObject&) = delete;
+    GLVolumeObject& operator=(GLVolumeObject&&) = delete;
+    ~GLVolumeObject() override {
+        glDeleteTextures(1, &mTex);
+    }
+    [[nodiscard]] TextureId getTexture() const override {
+        return mTex;
+    }
+    [[nodiscard]] ImVec2 size() const override {
+        return mSize;
+    }
+};
+
+std::unique_ptr<TextureObject> loadVolume(uint32_t size, uint32_t channels, const uint8_t* data) {
+    return std::make_unique<GLVolumeObject>(size, channels, data);
 }
 
 struct DynamicTexture final {

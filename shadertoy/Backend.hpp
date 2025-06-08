@@ -27,12 +27,17 @@
 SHADERTOY_NAMESPACE_BEGIN
 
 using TextureId = uintptr_t;
+enum class TexType {
+    Tex2D,
+    Tex3D,
+    CubeMap,
+};
 struct DoubleBufferedTex final {
     TextureId t1, t2;
-    bool isCube;
+    TexType type;
 
-    explicit DoubleBufferedTex(TextureId t, bool cube) : t1{ t }, t2{ t }, isCube{ cube } {}
-    explicit DoubleBufferedTex(TextureId t1Val, TextureId t2Val, bool cube) : t1{ t1Val }, t2{ t2Val }, isCube{ cube } {}
+    explicit DoubleBufferedTex(TextureId t, TexType type) : t1{ t }, t2{ t }, type{ type } {}
+    explicit DoubleBufferedTex(TextureId t1Val, TextureId t2Val, TexType type) : t1{ t1Val }, t2{ t2Val }, type{ type } {}
     TextureId get() {
         std::swap(t1, t2);
         return t1;
@@ -110,6 +115,7 @@ public:
 
 std::unique_ptr<TextureObject> loadTexture(uint32_t width, uint32_t height, const uint32_t* data);
 std::unique_ptr<TextureObject> loadCubeMap(uint32_t size, const uint32_t* data);
+std::unique_ptr<TextureObject> loadVolume(uint32_t size, uint32_t channels, const uint8_t* data);
 std::unique_ptr<Pipeline> createPipeline();
 
 SHADERTOY_NAMESPACE_END

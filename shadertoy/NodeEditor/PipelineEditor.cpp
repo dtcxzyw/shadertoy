@@ -216,6 +216,12 @@ EditorCubeMap& PipelineEditor::spawnCubeMap() {
     ret->outputs.emplace_back(nextId(), "Output", NodeType::CubeMap);
     return buildNode(mNodes, std::move(ret));
 }
+EditorVolume& PipelineEditor::spawnVolume() {
+    auto ret = std::make_unique<EditorVolume>(nextId(), generateUniqueName("Volume"));
+    ret->type = NodeType::Volume;
+    ret->outputs.emplace_back(nextId(), "Output", NodeType::Volume);
+    return buildNode(mNodes, std::move(ret));
+}
 EditorKeyboard& PipelineEditor::spawnKeyboard() {
     auto ret = std::make_unique<EditorKeyboard>(nextId(), generateUniqueName("Keyboard"));
     ret->outputs.emplace_back(nextId(), "Output", NodeType::Image);
@@ -247,6 +253,8 @@ static ImColor getIconColor(const NodeType type) {
             return { 255, 0, 0 };
         case NodeType::CubeMap:
             return { 0, 255, 0 };
+        case NodeType::Volume:
+            return { 0, 255, 255 };
         case NodeType::Sound:
             return { 0, 0, 255 };
     }
@@ -266,6 +274,9 @@ static void drawPinIcon(const EditorPin& pin, const bool connected, const int al
             break;
         case NodeType::Sound:
             iconType = IconType::Circle;
+            break;
+        case NodeType::Volume:
+            iconType = IconType::RoundSquare;
             break;
     }
 
@@ -870,15 +881,16 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 if(target.front().t1)
                     textureMap.emplace(node,
                                        DoubleBufferedTex{ target.front().t1->getTexture(), target.front().t2->getTexture(),
-                                                          node->type == NodeType::CubeMap });
+                                                          node->type == NodeType::CubeMap ? TexType::CubeMap : TexType::Tex2D });
                 break;
             }
             case NodeClass::LastFrame: {
                 const auto ref = dynamic_cast<EditorLastFrame*>(node)->lastFrame;
                 auto target = frameBufferMap.at(ref).front();
                 assert(target.t1 && target.t2);
-                textureMap.emplace(
-                    node, DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(), ref->type == NodeType::CubeMap });
+                textureMap.emplace(node,
+                                   DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(),
+                                                      ref->type == NodeType::CubeMap ? TexType::CubeMap : TexType::Tex2D });
                 break;
             }
             case NodeClass::RenderOutput: {
@@ -887,18 +899,25 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
             case NodeClass::Texture: {
                 auto& textureId = dynamic_cast<EditorTexture*>(node)->textureId;
                 textureSizeMap.emplace(node, textureId->size());
-                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), false });
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), TexType::Tex2D });
                 break;
             }
             case NodeClass::CubeMap: {
                 auto& textureId = dynamic_cast<EditorCubeMap*>(node)->textureId;
                 textureSizeMap.emplace(node, textureId->size());
-                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), true });
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), TexType::CubeMap });
+                break;
+            }
+            case NodeClass::Volume: {
+                auto& textureId = dynamic_cast<EditorVolume*>(node)->textureId;
+                textureSizeMap.emplace(node, textureId->size());
+                textureMap.emplace(node, DoubleBufferedTex{ textureId->getTexture(), TexType::Tex3D });
                 break;
             }
             case NodeClass::Keyboard: {
                 textureSizeMap.emplace(node, ImVec2{ 256, 3 });
-                textureMap.emplace(node, DoubleBufferedTex{ pipeline->createDynamicTexture(256, 3, setupKeyboardData), false });
+                textureMap.emplace(
+                    node, DoubleBufferedTex{ pipeline->createDynamicTexture(256, 3, setupKeyboardData), TexType::Tex2D });
                 break;
             }
             default:
@@ -1155,6 +1174,19 @@ void EditorCubeMap::fromSTTF(Node& node) {
     const auto& texture = dynamic_cast<CubeMap&>(node);
     pixel = texture.pixel;
     textureId = loadCubeMap(texture.size, pixel.data());
+}
+bool EditorVolume::renderContent() {
+    return false;
+}
+std::unique_ptr<Node> EditorVolume::toSTTF() const {
+    const auto size = static_cast<uint32_t>(textureId->size().x);
+    const auto channels = pixel.size() / (size * size * size);
+    return std::make_unique<Volume>(static_cast<uint32_t>(textureId->size().x), static_cast<uint32_t>(channels), pixel);
+}
+void EditorVolume::fromSTTF(Node& node) {
+    const auto& texture = dynamic_cast<Volume&>(node);
+    pixel = texture.pixel;
+    textureId = loadVolume(texture.size, texture.channels, pixel.data());
 }
 
 // See also https://github.com/thedmd/imgui-node-editor/issues/48
@@ -1466,6 +1498,70 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         cubeMapCache.emplace(id, &texture);
         return &texture;
     };
+    std::unordered_map<std::string, EditorVolume*> volumeCache;
+    auto getVolume = [&](nlohmann::json& tex) -> EditorVolume* {
+        const auto id = tex.at("id").get<std::string>();
+        if(const auto iter = volumeCache.find(id); iter != volumeCache.cend())
+            return iter->second;
+        auto& texture = spawnVolume();
+        const auto texPath = tex.at("filepath").get<std::string>();
+        HelloImGui::Log(HelloImGui::LogLevel::Info, "Downloading volume %s", texPath.c_str());
+        auto img = client.Get(texPath, headers);
+        if(img->body.empty()) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Failed to load texture %s: %s", texPath.c_str(), stbi_failure_reason());
+            throw Error{};
+        }
+        if(img->body.size() < 20ULL) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Invalid volume format %s: %zu", texPath.c_str(), img->body.size());
+            throw Error{};
+        }
+        auto begin = reinterpret_cast<const uint32_t*>(img->body.data());
+        uint32_t x = *++begin;
+        uint32_t y = *++begin;
+        uint32_t z = *++begin;
+        if(x != y || y != z) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Unsupported volume size %s: (%u, %u, %u)", texPath.c_str(), x, y, z);
+            throw Error{};
+        }
+        uint32_t channels_layout_format = *++begin;
+        struct Metadata final {
+            uint8_t channels;
+            uint8_t layout;
+            uint16_t format;
+        } metadata;
+        static_assert(sizeof(metadata) == sizeof(uint32_t));
+        memcpy(&metadata, &channels_layout_format, sizeof(Metadata));
+
+        if(metadata.channels != 1 && metadata.channels != 4) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Unsupported volume channels %s: %u", texPath.c_str(), metadata.channels);
+            throw Error{};
+        }
+
+        if(metadata.layout != 0) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Unsupported volume layout %s: %u", texPath.c_str(), metadata.layout);
+            throw Error{};
+        }
+
+        if(metadata.format != 0) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Unsupported volume format %s: %u", texPath.c_str(), metadata.format);
+            throw Error{};
+        }
+
+        const uint32_t size = x;
+        const uint32_t channels = metadata.channels;
+        const size_t points = static_cast<size_t>(size) * size * size * channels;
+        if(img->body.size() != 20 + points) {
+            HelloImGui::Log(HelloImGui::LogLevel::Info, "Invalid volume format %s: %zu", texPath.c_str(), img->body.size());
+            throw Error{};
+        }
+        const auto start = img->body.data() + 20;
+        const auto end = start + points;
+        texture.pixel = std::vector<uint8_t>{ start, end };
+        texture.textureId = loadVolume(size, channels, texture.pixel.data());
+
+        volumeCache.emplace(id, &texture);
+        return &texture;
+    };
     std::unordered_set<std::string> passIds;
     const auto isDynamicCubeMap = [&](nlohmann::json& tex) {
         const auto id = tex.at("id").get<std::string>();
@@ -1507,6 +1603,8 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 } else if(inputType == "cubemap") {
                     if(!isDynamicCubeMap(input))
                         addLink(getCubeMap(input), &node, channel, &input);
+                } else if(inputType == "volume") {
+                    addLink(getVolume(input), &node, channel, &input);
                 } else {
                     Log(HelloImGui::LogLevel::Error, "Unsupported input type %s", inputType.c_str());
                 }
