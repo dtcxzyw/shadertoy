@@ -1668,7 +1668,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
 
                 auto channel = input.at("channel").get<uint32_t>();
                 auto inputId = input.at("id").get<std::string>();
-                if(!newShaderNodes.contains(inputId)) {
+                if(!newShaderNodes.count(inputId)) {
                     // Shadertoy doesn't fail when an input is missing, so we create a default dummy node
                     auto& inputNode = spawnShader(inputType != "cubemap" ? NodeType::Image : NodeType::CubeMap);
                     inputNode.currShaderText = common + (inputType == "cubemap" ? initialCubeMap : initialBuffer);
