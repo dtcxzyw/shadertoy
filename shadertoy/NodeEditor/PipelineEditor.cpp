@@ -79,6 +79,22 @@ static constexpr auto initialShader = R"(void mainImage( out vec4 fragColor, in 
 }
 )";
 
+static constexpr auto initialCubeMap = R"(void mainCubemap( out vec4 fragColor, in vec2 fragCoord, in vec3 rayOri, in vec3 rayDir )
+{
+    // Ray direction as color
+    vec3 col = 0.5 + 0.5*rayDir;
+
+    // Output to cubemap
+    fragColor = vec4(col,1.0);
+}
+)";
+
+static constexpr auto initialBuffer = R"(void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    fragColor = vec4(0.0,0.0,1.0,1.0);
+}
+)";
+
 uint32_t PipelineEditor::nextId() {
     return mNextId++;
 }
@@ -1651,7 +1667,16 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 }
 
                 auto channel = input.at("channel").get<uint32_t>();
-                auto src = newShaderNodes.at(input.at("id").get<std::string>());
+                auto inputId = input.at("id").get<std::string>();
+                if(!newShaderNodes.contains(inputId)) {
+                    // Shadertoy doesn't fail when an input is missing, so we create a default dummy node
+                    auto& inputNode = spawnShader(inputType != "cubemap" ? NodeType::Image : NodeType::CubeMap);
+                    inputNode.currShaderText = common + (inputType == "cubemap" ? initialCubeMap : initialBuffer);
+                    inputNode.name = inputId;
+                    newShaderNodes.emplace(inputId, &inputNode);
+                }
+
+                auto src = newShaderNodes.at(inputId);
                 const auto idxSrc = getOrder(src->name);
                 if(idxSrc < idxDst) {
                     addLink(src, node, channel, &input);
