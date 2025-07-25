@@ -15,6 +15,7 @@
 #include "shadertoy/Backend.hpp"
 #include "shadertoy/Support.hpp"
 #include <array>
+#include <cmath>
 
 #include "shadertoy/SuppressWarningPush.hpp"
 
