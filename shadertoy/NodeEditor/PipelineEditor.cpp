@@ -1671,7 +1671,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
                 if(!newShaderNodes.count(inputId)) {
                     // Shadertoy doesn't fail when an input is missing, so we create a default dummy node
                     auto& inputNode = spawnShader(inputType != "cubemap" ? NodeType::Image : NodeType::CubeMap);
-                    inputNode.currShaderText = common + (inputType == "cubemap" ? initialCubeMap : initialBuffer);
+                    inputNode.editor.setText(common + (inputType == "cubemap" ? initialCubeMap : initialBuffer));
                     inputNode.name = inputId;
                     newShaderNodes.emplace(inputId, &inputNode);
                 }
