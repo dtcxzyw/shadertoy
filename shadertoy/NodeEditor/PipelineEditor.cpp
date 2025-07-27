@@ -1590,8 +1590,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
             pass.at("name") = generateUniqueName(pass.at("type").get<std::string>());
         }
 
-        // Maybe pass.at("inputs").empty() is not needed?
-        if(pass.at("inputs").empty() && !pass.at("outputs").empty()) {
+        if( !pass.at("outputs").empty() && pass.at("type").get<std::string>() == "cubemap") {
             // The output contains no input, so this is a dynamic cube map
             dynamicCubeMapChannels.insert(pass.at("outputs")[0].at("channel").get<int>());
         }
