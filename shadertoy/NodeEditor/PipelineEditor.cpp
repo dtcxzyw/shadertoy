@@ -1579,18 +1579,28 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         return &texture;
     };
     std::unordered_set<std::string> passIds;
+    std::unordered_set<int> dynamicCubeMapChannels;
     const auto isDynamicCubeMap = [&](nlohmann::json& tex) {
         const auto id = tex.at("id").get<std::string>();
-        return passIds.count(id) != 0;
+        return passIds.count(id) != 0 || dynamicCubeMapChannels.count(tex.value("channel", -1)) != 0;
     };
     std::string common;
     for(auto& pass : renderPasses) {
         if(pass.at("name").get<std::string>().empty()) {
             pass.at("name") = generateUniqueName(pass.at("type").get<std::string>());
         }
+
+        // Maybe pass.at("inputs").empty() is not needed?
+        if(pass.at("inputs").empty() && !pass.at("outputs").empty()) {
+            // The output contains no input, so this is a dynamic cube map
+            dynamicCubeMapChannels.insert(pass.at("outputs")[0].at("channel").get<int>());
+        }
+
         if(pass.at("outputs").empty()) {
             pass.at("outputs").push_back(nlohmann::json::object({ { "id", "tmp" + std::to_string(nextId()) } }));
         }
+
+
         passIds.insert(pass.at("outputs")[0].at("id").get<std::string>());
     }
     for(auto& pass : renderPasses) {
