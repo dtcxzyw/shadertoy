@@ -1672,6 +1672,23 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
 
                 auto channel = input.at("channel").get<uint32_t>();
                 auto inputId = input.at("id").get<std::string>();
+
+                // There is only one dynamic cube map in Shadertoy, so we can safely use the first one
+                if(dynamicCubeMap) {
+                    for(auto& innerPass : renderPasses) {
+                        if(innerPass.at("type").get<std::string>() != "cubemap") {
+                            continue;
+                        }
+
+                        if(innerPass.at("outputs").empty())
+                            continue;
+
+                        inputId = innerPass.at("outputs")[0].at("id").get<std::string>();
+                        channel = innerPass.at("outputs")[0].at("channel").get<uint32_t>();
+                        break;
+                    }
+                }
+                
                 if(!newShaderNodes.count(inputId)) {
                     // Shadertoy doesn't fail when an input is missing, so we create a default dummy node
                     auto& inputNode = spawnShader(inputType != "cubemap" ? NodeType::Image : NodeType::CubeMap);
