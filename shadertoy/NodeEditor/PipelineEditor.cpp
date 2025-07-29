@@ -1579,20 +1579,15 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
         return &texture;
     };
     std::unordered_set<std::string> passIds;
-    std::unordered_set<int> dynamicCubeMapChannels;
+    // Look at any index.html at EffectPass.prototype.NewTexture if(assetID_to_cubemapBuferId)
     const auto isDynamicCubeMap = [&](nlohmann::json& tex) {
         const auto id = tex.at("id").get<std::string>();
-        return passIds.count(id) != 0 || dynamicCubeMapChannels.count(tex.value("channel", -1)) != 0;
+        return id == "4dX3Rr";
     };
     std::string common;
     for(auto& pass : renderPasses) {
         if(pass.at("name").get<std::string>().empty()) {
             pass.at("name") = generateUniqueName(pass.at("type").get<std::string>());
-        }
-
-        if(!pass.at("outputs").empty() && pass.at("type").get<std::string>() == "cubemap") {
-            // The output contains no input, so this is a dynamic cube map
-            dynamicCubeMapChannels.insert(pass.at("outputs")[0].at("channel").get<int>());
         }
 
         if(pass.at("outputs").empty()) {
