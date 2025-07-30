@@ -270,8 +270,6 @@ static ImColor getIconColor(const NodeType type) {
             return { 255, 0, 0 };
         case NodeType::CubeMap:
             return { 0, 255, 0 };
-        case NodeType::CubeMapFlippedY:
-            return { 255, 255, 0 };
         case NodeType::Volume:
             return { 0, 255, 255 };
         case NodeType::Sound:
@@ -289,9 +287,6 @@ static void drawPinIcon(const EditorPin& pin, const bool connected, const int al
             iconType = IconType::Square;
             break;
         case NodeType::CubeMap:
-            iconType = IconType::Diamond;
-            break;
-        case NodeType::CubeMapFlippedY:
             iconType = IconType::Diamond;
             break;
         case NodeType::Sound:
@@ -860,7 +855,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                     frameBuffer = DoubleBufferedFB{ t };
                 }
                 frameBufferMap.emplace(node, std::vector<DoubleBufferedFB>{ frameBuffer });
-            } else if(node->type == NodeType::CubeMap || node->type == NodeType::CubeMapFlippedY) {
+            } else if(node->type == NodeType::CubeMap) {
                 std::vector<DoubleBufferedFB> buffers;
                 buffers.reserve(6);
                 if(requireDoubleBuffer.count(node)) {
@@ -902,9 +897,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                                   node == sinkNode);
 
                 if(target.front().t1) {
-                    auto texType = (node->type == NodeType::CubeMap || node->type == NodeType::CubeMapFlippedY) ?
-                        TexType::CubeMap :
-                        TexType::Tex2D;
+                    auto texType = node->type == NodeType::CubeMap ? TexType::CubeMap : TexType::Tex2D;
 
                     textureMap.emplace(
                         node, DoubleBufferedTex{ target.front().t1->getTexture(), target.front().t2->getTexture(), texType });
@@ -918,9 +911,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                 assert(target.t1 && target.t2);
                 textureMap.emplace(node,
                                    DoubleBufferedTex{ target.t2->getTexture(), target.t1->getTexture(),
-                                                      (ref->type == NodeType::CubeMap || ref->type == NodeType::CubeMapFlippedY) ?
-                                                          TexType::CubeMap :
-                                                          TexType::Tex2D });
+                                                      ref->type == NodeType::CubeMap ? TexType::CubeMap : TexType::Tex2D });
                 break;
             }
             case NodeClass::RenderOutput: {
@@ -1618,35 +1609,7 @@ void PipelineEditor::loadFromShaderToy(const std::string& path) {
             common = code + '\n';
         } else if(type == "image" || type == "buffer" || type == "cubemap") {
             const auto output = pass.at("outputs")[0].at("id").get<std::string>();
-            auto nodeType = NodeType::Image;
-
-            if(type == "cubemap") {
-                nodeType = NodeType::CubeMap;
-                // Check if the main image output using this CubeMap has flipped Y (see example
-                // https://www.shadertoy.com/view/WX3Xzs)
-                bool shouldBreak = false;
-                for(auto& r : renderPasses) {
-                    if(shouldBreak)
-                        break;
-
-                    auto i = r.at("inputs");
-                    if(r.at("type").get<std::string>() != "image")
-                        continue;
-                    if(i.empty())
-                        continue;
-
-                    for(auto& input : i) {
-                        if(input.at("type").get<std::string>() != "cubemap" || !isDynamicCubeMap(input))
-                            continue;
-                        if(input["sampler"].at("vflip").get<std::string>() == "true") {
-                            nodeType = NodeType::CubeMapFlippedY;
-                            shouldBreak = true;
-
-                            break;
-                        }
-                    }
-                }
-            }
+            auto nodeType = type == "cubemap" ? NodeType::CubeMap : NodeType::Image;
 
             auto& node = spawnShader(nodeType);
             node.editor.setText(code);

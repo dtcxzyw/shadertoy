@@ -265,7 +265,7 @@ public:
         : mBuffers{ std::move(buffer) }, mType{ type }, mChannels{ std::move(channels) } {
         std::string vertexSrc = shaderVersionDirective;
         std::string pixelSrc = shaderVersionDirective;
-        if(type == NodeType::CubeMap || type == NodeType::CubeMapFlippedY) {
+        if(type == NodeType::CubeMap) {
             vertexSrc += shaderCubeMapDef;
             pixelSrc += shaderCubeMapDef;
         }
@@ -352,9 +352,9 @@ public:
             ImVec2 size, base, fbSize, uniformSize;
             if(buffer) {
                 base = { 0, 0 };
-                size = (mType == NodeType::CubeMap || mType == NodeType::CubeMapFlippedY) ? cubeMapSize : screenSize;
+                size = mType == NodeType::CubeMap ? cubeMapSize : screenSize;
                 fbSize = size;
-                uniformSize = (mType == NodeType::CubeMap || mType == NodeType::CubeMapFlippedY) ? cubeMapSize : canvasSize;
+                uniformSize = mType == NodeType::CubeMap ? cubeMapSize : canvasSize;
                 glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
                 glDisable(GL_SCISSOR_TEST);
                 buffer->bind(static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y));
@@ -398,11 +398,10 @@ public:
 
                 // For Y-flipped cubemaps, also flip Y coordinates of all faces
                 // to match ShaderToy's UNPACK_FLIP_Y_WEBGL behavior
-                if(mType == NodeType::CubeMapFlippedY) {
-                    for(auto& [pos, coord, point] : vertices) {
-                        // Flip the 3D point's Y coordinate
-                        point[1] = -point[1];
-                    }
+                // CubeMaps are always Y-flipped
+                for(auto& [pos, coord, point] : vertices) {
+                    // Flip the 3D point's Y coordinate
+                    point[1] = -point[1];
                 }
 
                 for(auto& [pos, coord, point] : vertices) {
@@ -588,8 +587,8 @@ public:
         glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAX_LEVEL, static_cast<GLint>(std::log2(size)));
         GLenum internalFormat = channels == 1 ? GL_R8 : GL_RGBA;
         GLenum format = channels == 1 ? GL_RED : GL_RGBA;
-        glTexImage3D(GL_TEXTURE_3D, 0, internalFormat, static_cast<GLsizei>(size), static_cast<GLsizei>(size), static_cast<GLsizei>(size),
-                     0, format, GL_UNSIGNED_BYTE, data);  // R8G8B8A8
+        glTexImage3D(GL_TEXTURE_3D, 0, internalFormat, static_cast<GLsizei>(size), static_cast<GLsizei>(size),
+                     static_cast<GLsizei>(size), 0, format, GL_UNSIGNED_BYTE, data);  // R8G8B8A8
         glGenerateMipmap(GL_TEXTURE_3D);
         glBindTexture(GL_TEXTURE_3D, GL_NONE);
     }
