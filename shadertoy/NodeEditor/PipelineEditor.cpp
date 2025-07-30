@@ -270,6 +270,8 @@ static ImColor getIconColor(const NodeType type) {
             return { 255, 0, 0 };
         case NodeType::CubeMap:
             return { 0, 255, 0 };
+        case NodeType::CubeMapFlippedY:
+            return { 255, 255, 0 };
         case NodeType::Volume:
             return { 0, 255, 255 };
         case NodeType::Sound:
@@ -287,6 +289,9 @@ static void drawPinIcon(const EditorPin& pin, const bool connected, const int al
             iconType = IconType::Square;
             break;
         case NodeType::CubeMap:
+            iconType = IconType::Diamond;
+            break;
+        case NodeType::CubeMapFlippedY:
             iconType = IconType::Diamond;
             break;
         case NodeType::Sound:
@@ -855,7 +860,7 @@ std::unique_ptr<Pipeline> PipelineEditor::buildPipeline() {
                     frameBuffer = DoubleBufferedFB{ t };
                 }
                 frameBufferMap.emplace(node, std::vector<DoubleBufferedFB>{ frameBuffer });
-            } else if(node->type == NodeType::CubeMap) {
+            } else if(node->type == NodeType::CubeMap || node->type == NodeType::CubeMapFlippedY) {
                 std::vector<DoubleBufferedFB> buffers;
                 buffers.reserve(6);
                 if(requireDoubleBuffer.count(node)) {
