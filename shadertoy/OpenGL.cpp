@@ -102,12 +102,12 @@ constexpr Vec3 cubeMapVertexPos[8] = { { -1.0f, -1.0f, -1.0f }, { -1.0f, -1.0f, 
                                        { 1.0f, 1.0f, -1.0f },   { 1.0f, 1.0f, 1.0f } };
 // left-bottom left-top right-top right-bottom
 constexpr uint32_t cubeMapVertexIndex[6][4] = {
-    { 4, 6, 7, 5 },  // right
-    { 1, 3, 2, 0 },  // left
-    { 2, 3, 7, 6 },  // top
-    { 1, 0, 4, 5 },  // bottom
-    { 5, 7, 3, 1 },  // back
-    { 0, 2, 6, 4 }   // front
+    { 5, 7, 6, 4 },  // +X (right face)
+    { 0, 2, 3, 1 },  // -X (left face)
+    { 0, 1, 5, 4 },  // +Y (top face)
+    { 3, 2, 6, 7 },  // -Y (bottom face)
+    { 1, 3, 7, 5 },  // +Z (back face)
+    { 4, 6, 2, 0 }   // -Z (front face)
 };
 
 struct VertexCubeMap final {  // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -265,7 +265,7 @@ public:
         : mBuffers{ std::move(buffer) }, mType{ type }, mChannels{ std::move(channels) } {
         std::string vertexSrc = shaderVersionDirective;
         std::string pixelSrc = shaderVersionDirective;
-        if(type == NodeType::CubeMap) {
+        if(type == NodeType::CubeMap || type == NodeType::CubeMapFlippedY) {
             vertexSrc += shaderCubeMapDef;
             pixelSrc += shaderCubeMapDef;
         }
@@ -352,9 +352,9 @@ public:
             ImVec2 size, base, fbSize, uniformSize;
             if(buffer) {
                 base = { 0, 0 };
-                size = mType == NodeType::CubeMap ? cubeMapSize : screenSize;
+                size = (mType == NodeType::CubeMap || mType == NodeType::CubeMapFlippedY) ? cubeMapSize : screenSize;
                 fbSize = size;
-                uniformSize = mType == NodeType::CubeMap ? cubeMapSize : canvasSize;
+                uniformSize = (mType == NodeType::CubeMap || mType == NodeType::CubeMapFlippedY) ? cubeMapSize : canvasSize;
                 glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
                 glDisable(GL_SCISSOR_TEST);
                 buffer->bind(static_cast<uint32_t>(size.x), static_cast<uint32_t>(size.y));
@@ -395,6 +395,16 @@ public:
                     VertexCubeMap{ ImVec2{ base.x + size.x, base.y + size.y }, ImVec2{ uniformSize.x, 0.0 },
                                    cubeMapVertexPos[cubeMapVertexIndex[idx][3]] },  // right-bottom
                 };
+
+                // For Y-flipped cubemaps, also flip Y coordinates of all faces
+                // to match ShaderToy's UNPACK_FLIP_Y_WEBGL behavior
+                if(mType == NodeType::CubeMapFlippedY) {
+                    for(auto& [pos, coord, point] : vertices) {
+                        // Flip the 3D point's Y coordinate
+                        point[1] = -point[1];
+                    }
+                }
+
                 for(auto& [pos, coord, point] : vertices) {
                     pos.x = pos.x / fbSize.x * 2.0f - 1.0f;
                     pos.y = 1.0f - pos.y / fbSize.y * 2.0f;
